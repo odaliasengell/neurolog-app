@@ -2,10 +2,7 @@
   "extends": [
     "next/core-web-vitals",
     "@typescript-eslint/recommended",
-    "plugin:@typescript-eslint/recommended-requiring-type-checking",
-    "plugin:testing-library/react",
-    "plugin:jest-dom/recommended",
-    "prettier"
+    "@typescript-eslint/recommended-requiring-type-checking"
   ],
   "parser": "@typescript-eslint/parser",
   "parserOptions": {
@@ -14,21 +11,30 @@
   "plugins": ["@typescript-eslint", "testing-library", "jest-dom"],
   "rules": {
     "@typescript-eslint/no-unused-vars": "error",
-    "@typescript-eslint/explicit-function-return-type": "warn",
     "@typescript-eslint/no-explicit-any": "warn",
     "@typescript-eslint/prefer-const": "error",
-    "@typescript-eslint/no-var-requires": "error",
+    "@typescript-eslint/no-non-null-assertion": "error",
+    "@typescript-eslint/explicit-function-return-type": "warn",
+    "@typescript-eslint/no-unsafe-assignment": "warn",
+    "@typescript-eslint/no-unsafe-call": "warn",
+    "@typescript-eslint/no-unsafe-member-access": "warn",
+    "@typescript-eslint/no-unsafe-return": "warn",
     "prefer-const": "error",
     "no-var": "error",
     "no-console": "warn",
-    "react-hooks/exhaustive-deps": "warn",
-    "react-hooks/rules-of-hooks": "error"
+    "eqeqeq": "error",
+    "curly": "error"
   },
   "overrides": [
     {
       "files": ["**/__tests__/**/*", "**/*.{test,spec}.*"],
+      "extends": ["plugin:testing-library/react", "plugin:jest-dom/recommended"],
       "env": {
         "jest": true
+      },
+      "rules": {
+        "@typescript-eslint/no-non-null-assertion": "off",
+        "@typescript-eslint/no-explicit-any": "off"
       }
     }
   ]

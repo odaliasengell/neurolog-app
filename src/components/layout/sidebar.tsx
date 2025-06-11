@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { useAuth } from '@/components/providers/auth-provider'
+import { useAuth } from '@/components/providers/AuthProvider'
 import {
   Home,
   Users,

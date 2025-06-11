@@ -1,176 +1,209 @@
-// src/hooks/use-children.ts
-'use client'
+// src/hooks/useChildren.ts
+import { useState, useEffect, useCallback } from 'react'
+import { supabase } from '@/lib/supabase'
+import type { Child, ChildWithRelation, RelationshipType } from '@/types'
 
-import { useState, useEffect } from 'react'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
-import { useAuth } from '@/components/providers/auth-provider'
-
-interface Child {
-  id: string
-  name: string
-  birth_date: string | null
-  diagnosis: string | null
-  notes: string | null
-  created_by: string
-  created_at: string
-  updated_at: string
+interface UseChildrenReturn {
+  children: ChildWithRelation[]
+  loading: boolean
+  error: string | null
+  createChild: (child: Omit<Child, 'id' | 'created_at' | 'updated_at' | 'created_by'>) => Promise<Child>
+  updateChild: (id: string, updates: Partial<Child>) => Promise<void>
+  deleteChild: (id: string) => Promise<void>
+  grantAccess: (childId: string, userId: string, relationshipType: RelationshipType, permissions: {
+    canEdit: boolean
+    canView: boolean
+    canExport: boolean
+  }) => Promise<void>
+  revokeAccess: (childId: string, userId: string) => Promise<void>
+  refreshChildren: () => Promise<void>
 }
 
-interface ChildWithRelation extends Child {
-  relationship_type: string
-  can_edit: boolean
-  can_view: boolean
-}
-
-export function useChildren() {
+export function useChildren(userId: string): UseChildrenReturn {
   const [children, setChildren] = useState<ChildWithRelation[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState<boolean>(true)
   const [error, setError] = useState<string | null>(null)
-  const { profile } = useAuth()
-  const supabase = createClientComponentClient()
 
-  const fetchChildren = async () => {
-  if (!profile) {
-    setLoading(false)
-    return
-  }
-
-  try {
-    setLoading(true)
-    
-    // CONSULTA CORREGIDA - Sin join directo que cause recursión
-    const { data: relations, error: relationsError } = await supabase
-      .from('user_child_relations')
-      .select('*')
-      .eq('user_id', profile.id)
-
-    if (relationsError) throw relationsError
-
-    if (!relations || relations.length === 0) {
-      setChildren([])
-      setError(null)
-      setLoading(false)
-      return
-    }
-
-    // Obtener los IDs de los niños
-    const childrenIds = relations.map(rel => rel.child_id)
-
-    // Consulta separada para los niños
-    const { data: childrenData, error: childrenError } = await supabase
-      .from('children')
-      .select('*')
-      .in('id', childrenIds)
-
-    if (childrenError) throw childrenError
-
-    // Combinar datos manualmente
-    const childrenWithRelations: ChildWithRelation[] = childrenData?.map(child => {
-      const relation = relations.find(rel => rel.child_id === child.id)
-      return {
-        ...child,
-        relationship_type: relation?.relationship_type || 'observer',
-        can_edit: relation?.can_edit || false,
-        can_view: relation?.can_view || true
-      }
-    }) || []
-
-    setChildren(childrenWithRelations)
-    setError(null)
-  } catch (err: any) {
-    setError(err.message)
-    console.error('Error fetching children:', err)
-  } finally {
-    setLoading(false)
-  }
-}
-
-  useEffect(() => {
-    fetchChildren()
-  }, [profile])
-
-  const addChild = async (childData: {
-    name: string
-    birth_date?: string
-    diagnosis?: string
-    notes?: string
-  }) => {
-    if (!profile) throw new Error('No user profile')
-
+  const fetchChildren = useCallback(async (): Promise<void> => {
     try {
-      // Crear el niño
-      const { data: newChild, error: childError } = await supabase
+      setLoading(true)
+      setError(null)
+
+      const { data, error } = await supabase
+        .from('children')
+        .select(`
+          *,
+          user_child_relations!inner(
+            relationship_type,
+            can_edit,
+            can_view,
+            can_export
+          )
+        `)
+        .eq('user_child_relations.user_id', userId)
+        .eq('is_active', true)
+        .order('name')
+
+      if (error) throw error
+
+      const childrenWithRelations: ChildWithRelation[] = data.map((child: any) => ({
+        ...child,
+        relationship_type: child.user_child_relations[0]?.relationship_type,
+        can_edit: child.user_child_relations[0]?.can_edit || false,
+        can_view: child.user_child_relations[0]?.can_view || false,
+        can_export: child.user_child_relations[0]?.can_export || false,
+      }))
+
+      setChildren(childrenWithRelations)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Error al cargar niños'
+      setError(message)
+      console.error('Error fetching children:', err)
+    } finally {
+      setLoading(false)
+    }
+  }, [userId])
+
+  const createChild = useCallback(async (
+    childData: Omit<Child, 'id' | 'created_at' | 'updated_at' | 'created_by'>
+  ): Promise<Child> => {
+    try {
+      setError(null)
+
+      const { data, error } = await supabase
         .from('children')
         .insert({
           ...childData,
-          created_by: profile.id
+          created_by: userId,
         })
         .select()
         .single()
 
-      if (childError) throw childError
+      if (error) throw error
 
-      // Crear la relación
-      const { error: relationError } = await supabase
-        .from('user_child_relations')
-        .insert({
-          user_id: profile.id,
-          child_id: newChild.id,
-          relationship_type: 'parent',
-          can_edit: true,
-          can_view: true
-        })
-
-      if (relationError) throw relationError
-
-      // Actualizar la lista
-      await fetchChildren()
-      return newChild
-    } catch (error) {
-      console.error('Error adding child:', error)
-      throw error
+      await fetchChildren() // Refrescar la lista
+      return data as Child
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Error al crear niño'
+      setError(message)
+      throw new Error(message)
     }
-  }
+  }, [userId, fetchChildren])
 
-  const updateChild = async (childId: string, updates: Partial<Child>) => {
+  const updateChild = useCallback(async (
+    id: string, 
+    updates: Partial<Child>
+  ): Promise<void> => {
     try {
+      setError(null)
+
       const { error } = await supabase
         .from('children')
         .update(updates)
-        .eq('id', childId)
+        .eq('id', id)
 
       if (error) throw error
 
-      await fetchChildren()
-    } catch (error) {
-      console.error('Error updating child:', error)
-      throw error
+      await fetchChildren() // Refrescar la lista
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Error al actualizar niño'
+      setError(message)
+      throw new Error(message)
     }
-  }
+  }, [fetchChildren])
 
-  const deleteChild = async (childId: string) => {
+  const deleteChild = useCallback(async (id: string): Promise<void> => {
     try {
+      setError(null)
+
       const { error } = await supabase
         .from('children')
-        .delete()
-        .eq('id', childId)
+        .update({ is_active: false })
+        .eq('id', id)
 
       if (error) throw error
 
-      await fetchChildren()
-    } catch (error) {
-      console.error('Error deleting child:', error)
-      throw error
+      await fetchChildren() // Refrescar la lista
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Error al eliminar niño'
+      setError(message)
+      throw new Error(message)
     }
-  }
+  }, [fetchChildren])
+
+  const grantAccess = useCallback(async (
+    childId: string,
+    targetUserId: string,
+    relationshipType: RelationshipType,
+    permissions: {
+      canEdit: boolean
+      canView: boolean
+      canExport: boolean
+    }
+  ): Promise<void> => {
+    try {
+      setError(null)
+
+      const { error } = await supabase
+        .from('user_child_relations')
+        .upsert({
+          user_id: targetUserId,
+          child_id: childId,
+          relationship_type: relationshipType,
+          can_edit: permissions.canEdit,
+          can_view: permissions.canView,
+          can_export: permissions.canExport,
+          granted_by: userId,
+        })
+
+      if (error) throw error
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Error al otorgar acceso'
+      setError(message)
+      throw new Error(message)
+    }
+  }, [userId])
+
+  const revokeAccess = useCallback(async (
+    childId: string,
+    targetUserId: string
+  ): Promise<void> => {
+    try {
+      setError(null)
+
+      const { error } = await supabase
+        .from('user_child_relations')
+        .delete()
+        .eq('child_id', childId)
+        .eq('user_id', targetUserId)
+
+      if (error) throw error
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Error al revocar acceso'
+      setError(message)
+      throw new Error(message)
+    }
+  }, [])
+
+  const refreshChildren = useCallback(async (): Promise<void> => {
+    await fetchChildren()
+  }, [fetchChildren])
+
+  useEffect(() => {
+    if (userId) {
+      fetchChildren()
+    }
+  }, [userId, fetchChildren])
 
   return {
     children,
     loading,
     error,
-    fetchChildren,
-    addChild,
+    createChild,
     updateChild,
-    deleteChild
+    deleteChild,
+    grantAccess,
+    revokeAccess,
+    refreshChildren,
   }
 }

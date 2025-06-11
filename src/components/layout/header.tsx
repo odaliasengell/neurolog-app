@@ -1,7 +1,7 @@
 // src/components/layout/header.tsx
 'use client'
 
-import { useAuth } from '@/components/providers/auth-provider'
+import { useAuth } from '@/components/providers/AuthProvider'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Bell, Search } from 'lucide-react'

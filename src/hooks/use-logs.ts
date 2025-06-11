@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
-import { useAuth } from '@/components/providers/auth-provider'
+import { useAuth } from '@/components/providers/AuthProvider'
 
 interface Log {
   id: string

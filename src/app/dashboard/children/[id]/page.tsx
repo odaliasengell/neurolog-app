@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { useAuth } from '@/components/providers/auth-provider'
+import { useAuth } from '@/components/providers/AuthProvider'
 import { useToast } from '@/components/ui/use-toast'
 import { 
   ArrowLeft, 
