@@ -1,35 +1,31 @@
 // src/app/dashboard/layout.tsx
-'use client'
+// Layout del dashboard actualizado con el nuevo modelo
 
-import { useAuth } from '@/components/providers/auth-provider'
-import { Sidebar } from '@/components/layout/sidebar'
-import { Header } from '@/components/layout/header'
-import { Loader2 } from 'lucide-react'
+import { Sidebar } from '@/components/layout/Sidebar';
+import { Header } from '@/components/layout/Header';
+import { AuthProvider } from '@/components/providers/AuthProvider';
+import { ToastProvider } from '@/components/providers/ToastProvider';
 
 export default function DashboardLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: React.ReactNode;
 }) {
-  const { loading } = useAuth()
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    )
-  }
-
   return (
-    <div className="flex h-screen bg-gray-100">
-      <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <Header />
-        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 p-6">
-          {children}
-        </main>
-      </div>
-    </div>
-  )
+    <AuthProvider>
+      <ToastProvider>
+        <div className="min-h-screen bg-gray-50">
+          <div className="flex h-screen">
+            <Sidebar />
+            <div className="flex-1 flex flex-col overflow-hidden">
+              <Header />
+              <main className="flex-1 overflow-auto">
+                {children}
+              </main>
+            </div>
+          </div>
+        </div>
+      </ToastProvider>
+    </AuthProvider>
+  );
 }
