@@ -1,5 +1,5 @@
 // src/components/layout/sidebar.tsx
-// Sidebar actualizado con navegación mejorada
+// Sidebar completamente responsivo con navegación mejorada
 
 'use client';
 
@@ -10,6 +10,8 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useLogs } from '@/hooks/use-logs';
 import {
@@ -26,7 +28,8 @@ import {
   FileText,
   Calendar,
   Download,
-  HelpCircle
+  HelpCircle,
+  ChevronRight
 } from 'lucide-react';
 
 interface NavigationItem {
@@ -52,6 +55,24 @@ export function Sidebar() {
       setNotifications(totalNotifications);
     }
   }, [stats, statsLoading]);
+
+  // Cerrar sidebar en mobile cuando se navega
+  useEffect(() => {
+    setIsOpen(false);
+  }, [pathname]);
+
+  // Prevenir scroll del body cuando el sidebar está abierto en mobile
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [isOpen]);
 
   const navigation: NavigationItem[] = [
     { 
@@ -123,65 +144,73 @@ export function Sidebar() {
 
   return (
     <>
-      {/* Mobile menu button */}
-      <div className="lg:hidden">
+      {/* Mobile menu button - Fixed position for better accessibility */}
+      <div className="lg:hidden fixed top-4 left-4 z-50">
         <Button
-          variant="ghost"
+          variant="outline"
           size="sm"
           onClick={() => setIsOpen(true)}
-          className="fixed top-4 left-4 z-50 bg-white shadow-md"
+          className="bg-white/90 backdrop-blur-sm shadow-lg border-gray-200 hover:bg-white"
+          aria-label="Abrir menú de navegación"
         >
-          <Menu className="h-6 w-6" />
+          <Menu className="h-5 w-5" />
         </Button>
       </div>
 
-      {/* Backdrop */}
+      {/* Backdrop - Improved for better mobile UX */}
       {isOpen && (
         <div 
-          className="fixed inset-0 bg-black bg-opacity-50 z-30 lg:hidden"
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden transition-opacity duration-300"
           onClick={() => setIsOpen(false)}
+          aria-hidden="true"
         />
       )}
 
-      {/* Sidebar */}
-      <div className={cn(
-        'fixed inset-y-0 left-0 z-40 w-72 bg-white shadow-xl transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0 flex flex-col',
-        isOpen ? 'translate-x-0' : '-translate-x-full'
+      {/* Sidebar Container */}
+      <aside className={cn(
+        // Base styles
+        'fixed inset-y-0 left-0 z-50 flex flex-col bg-white border-r border-gray-200 shadow-xl',
+        // Mobile styles
+        'w-80 max-w-[85vw] transform transition-transform duration-300 ease-out',
+        // Desktop styles
+        'lg:static lg:transform-none lg:shadow-none lg:w-72',
+        // Mobile visibility
+        isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
       )}>
-        {/* Close button (mobile) */}
-        <div className="flex items-center justify-between p-4 lg:hidden">
-          <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">NL</span>
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 lg:p-6 border-b border-gray-200">
+          {/* Logo */}
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 lg:w-10 lg:h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center shadow-sm">
+              <span className="text-white font-bold text-sm lg:text-lg">NL</span>
             </div>
-            <span className="text-lg font-bold text-gray-900">NeuroLog</span>
+            <div className="hidden lg:block">
+              <h1 className="text-xl font-bold text-gray-900">NeuroLog</h1>
+              <p className="text-xs text-gray-500">Seguimiento NEE</p>
+            </div>
+            <div className="lg:hidden">
+              <h1 className="text-lg font-bold text-gray-900">NeuroLog</h1>
+            </div>
           </div>
+
+          {/* Close button (mobile only) */}
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setIsOpen(false)}
+            className="lg:hidden"
+            aria-label="Cerrar menú de navegación"
           >
-            <X className="h-6 w-6" />
+            <X className="h-5 w-5" />
           </Button>
         </div>
 
-        {/* Logo */}
-        <div className="hidden lg:flex items-center space-x-3 p-6 border-b border-gray-200">
-          <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-            <span className="text-white font-bold text-lg">NL</span>
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">NeuroLog</h1>
-            <p className="text-xs text-gray-500">Seguimiento NEE</p>
-          </div>
-        </div>
-
-        {/* User Info */}
-        <div className="p-6 border-b border-gray-200">
+        {/* User Info Card */}
+        <div className="p-4 lg:p-6 border-b border-gray-200">
           <div className="flex items-center space-x-3">
-            <Avatar className="h-10 w-10">
+            <Avatar className="h-10 w-10 ring-2 ring-blue-100">
               <AvatarImage src={user?.avatar_url} alt={user?.full_name} />
-              <AvatarFallback className="bg-blue-100 text-blue-600">
+              <AvatarFallback className="bg-gradient-to-br from-blue-100 to-purple-100 text-blue-700 font-semibold">
                 {user?.full_name?.charAt(0)?.toUpperCase() || 'U'}
               </AvatarFallback>
             </Avatar>
@@ -196,71 +225,100 @@ export function Sidebar() {
                  user?.role === 'admin' ? 'Administrador' : 'Usuario'}
               </p>
             </div>
-            {isAdmin && (
-              <Badge variant="secondary" className="text-xs">
-                Admin
+            {notifications > 0 && (
+              <Badge 
+                variant="destructive" 
+                className="h-5 w-5 text-xs p-0 flex items-center justify-center"
+              >
+                {notifications > 9 ? '9+' : notifications}
               </Badge>
             )}
           </div>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-4 py-6 space-y-2">
-          {navigation.map((item) => {
-            const isActive = isActiveLink(item.href);
-            
-            // Filtrar elementos solo para admin
-            if (item.adminOnly && !isAdmin) {
-              return null;
-            }
-
-            return (
-              <Link
-                key={item.name}
-                href={item.href}
-                className="group"
-                onClick={() => setIsOpen(false)}
-              >
-                <div className={cn(
-                  'flex items-center justify-between px-3 py-2 text-sm font-medium rounded-lg group-hover:bg-gray-50 transition-colors',
-                  isActive
-                    ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-600'
-                    : 'text-gray-600 hover:text-gray-900'
-                )}>
-                  <div className="flex items-center">
-                    <item.icon className={cn(
-                      'mr-3 h-5 w-5 flex-shrink-0',
+        <ScrollArea className="flex-1 px-3 lg:px-4">
+          <nav className="space-y-1 py-4">
+            {navigation
+              .filter(item => !item.adminOnly || isAdmin)
+              .map((item) => {
+                const isActive = isActiveLink(item.href);
+                const Icon = item.icon;
+                
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      // Base styles
+                      'group flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200',
+                      // Hover states
+                      'hover:bg-gray-50 hover:text-gray-900',
+                      // Active states
+                      isActive
+                        ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-600'
+                        : 'text-gray-700'
+                    )}
+                  >
+                    <Icon className={cn(
+                      'mr-3 h-5 w-5 flex-shrink-0 transition-colors',
                       isActive ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-600'
                     )} />
-                    <span>{item.name}</span>
-                  </div>
-                  
-                  {item.badge && item.badge > 0 && (
-                    <Badge 
-                      variant="destructive" 
-                      className="h-5 w-5 text-xs p-0 flex items-center justify-center"
-                    >
-                      {item.badge > 9 ? '9+' : item.badge}
-                    </Badge>
-                  )}
-                </div>
-              </Link>
-            );
-          })}
-        </nav>
+                    
+                    <span className="flex-1 truncate">{item.name}</span>
+                    
+                    {/* Badge para notificaciones */}
+                    {item.badge && (
+                      <Badge 
+                        variant="destructive" 
+                        className="ml-2 h-5 w-5 text-xs p-0 flex items-center justify-center"
+                      >
+                        {item.badge > 9 ? '9+' : item.badge}
+                      </Badge>
+                    )}
+                    
+                    {/* Chevron para indicar página activa */}
+                    {isActive && (
+                      <ChevronRight className="ml-2 h-4 w-4 text-blue-600" />
+                    )}
+                  </Link>
+                );
+              })}
+          </nav>
+        </ScrollArea>
 
-        {/* Sign Out Button */}
-        <div className="p-4 border-t border-gray-200">
+        {/* Footer */}
+        <div className="p-4 lg:p-6 border-t border-gray-200 space-y-3">
+          {/* Help Button */}
           <Button
             variant="ghost"
+            size="sm"
+            className="w-full justify-start text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+            asChild
+          >
+            <Link href="/help">
+              <HelpCircle className="mr-3 h-4 w-4" />
+              Ayuda y soporte
+            </Link>
+          </Button>
+
+          {/* Sign Out Button */}
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={handleSignOut}
             className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50"
           >
-            <LogOut className="mr-3 h-5 w-5" />
-            Cerrar Sesión
+            <LogOut className="mr-3 h-4 w-4" />
+            Cerrar sesión
           </Button>
+          
+          {/* Version info */}
+          <div className="text-center pt-2">
+            <p className="text-xs text-gray-400">NeuroLog v1.0.0</p>
+          </div>
         </div>
-      </div>
+      </aside>
     </>
   );
 }

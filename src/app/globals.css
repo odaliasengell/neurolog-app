@@ -35,7 +35,7 @@
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
 
-    /* Colores para sidebar (componentes adicionales) */
+    /* Colores para sidebar */
     --sidebar: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
     --sidebar-primary: 240 5.9% 10%;
@@ -87,45 +87,71 @@
   }
 }
 
-
 @layer base {
   * {
     @apply border-border;
   }
 
-  body {
-    @apply bg-background text-foreground;
+  html {
+    /* Mejorar scroll en móviles */
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
   }
 
-  /* Estilos para elementos HTML básicos */
+  body {
+    @apply bg-background text-foreground;
+    /* Prevenir zoom en inputs en iOS */
+    -webkit-text-size-adjust: 100%;
+    /* Mejorar fuentes en diferentes dispositivos */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Mejorar tipografía responsiva */
   h1, h2, h3, h4, h5, h6 {
     @apply font-semibold tracking-tight;
+    /* Mejorar quebrado de línea */
+    overflow-wrap: break-word;
+    hyphens: auto;
   }
 
   h1 {
-    @apply text-4xl lg:text-5xl;
+    @apply text-2xl sm:text-3xl lg:text-4xl xl:text-5xl;
   }
 
   h2 {
-    @apply text-3xl lg:text-4xl;
+    @apply text-xl sm:text-2xl lg:text-3xl xl:text-4xl;
   }
 
   h3 {
-    @apply text-2xl lg:text-3xl;
+    @apply text-lg sm:text-xl lg:text-2xl xl:text-3xl;
   }
 
   h4 {
-    @apply text-xl lg:text-2xl;
+    @apply text-base sm:text-lg lg:text-xl xl:text-2xl;
   }
 
-  /* Enlaces */
+  /* Enlaces responsivos */
   a {
     @apply text-primary underline-offset-4 hover:underline;
+    /* Mejorar área de toque en móviles */
+    min-height: 44px;
+    min-width: 44px;
+    display: inline-flex;
+    align-items: center;
   }
 
-  /* Código */
+  /* Código responsivo */
   code {
-    @apply relative rounded bg-muted px-[0.3rem] py-[0.2rem] font-mono text-sm font-semibold;
+    @apply relative rounded bg-muted px-[0.3rem] py-[0.2rem] font-mono text-xs sm:text-sm font-semibold;
+    overflow-wrap: break-word;
+  }
+
+  /* Inputs más accesibles en móviles */
+  input, textarea, select {
+    /* Prevenir zoom en iOS */
+    font-size: 16px;
+    @apply text-sm sm:text-base;
   }
 
   /* Scrollbars personalizados */
@@ -145,65 +171,45 @@
     @apply bg-muted-foreground;
   }
 
-  /* Focus visible para accesibilidad */
+  /* Focus visible mejorado para accesibilidad */
   .focus-visible {
     @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
   }
 
-  /* Animaciones personalizadas para el proyecto */
-  .fade-in {
-    animation: fadeIn 0.3s ease-in-out;
-  }
-
-  .slide-in {
-    animation: slideIn 0.4s ease-out;
-  }
-
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
-  }
-
-  @keyframes slideIn {
-    from {
-      transform: translateY(-10px);
-      opacity: 0;
-    }
-    to {
-      transform: translateY(0);
-      opacity: 1;
-    }
-  }
-
-  /* Clases para el estado de carga */
-  .loading {
-    @apply animate-pulse;
-  }
-
-  .skeleton {
-    @apply bg-muted rounded animate-pulse;
+  /* Prevenir selección de texto en elementos de UI */
+  .select-none {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
   }
 }
 
-
 @layer components {
-  /* Botón de acción flotante */
+  /* Botón de acción flotante responsivo */
   .fab {
-    @apply fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105;
+    @apply fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50;
+    @apply h-12 w-12 sm:h-14 sm:w-14 rounded-full;
+    @apply bg-primary text-primary-foreground shadow-lg hover:shadow-xl;
+    @apply transition-all duration-200 hover:scale-105 active:scale-95;
+    /* Mejorar área de toque */
+    min-height: 48px;
+    min-width: 48px;
   }
 
-  /* Card con hover effect */
+  /* Card con hover effect responsivo */
   .card-hover {
-    @apply transition-all duration-200 hover:shadow-md hover:-translate-y-1;
+    @apply transition-all duration-200;
+    @apply hover:shadow-md hover:-translate-y-1;
+    /* En móviles, reducir el efecto hover */
+    @media (hover: none) {
+      @apply hover:shadow-sm hover:translate-y-0;
+    }
   }
 
-  /* Badge de estado */
+  /* Badge de estado responsivo */
   .status-badge {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+    @apply inline-flex items-center px-2 py-1 sm:px-2.5 sm:py-0.5 rounded-full text-xs font-medium;
   }
 
   .status-badge.success {
@@ -222,23 +228,26 @@
     @apply bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200;
   }
 
-  /* Gradientes personalizados para NeuroLog */
-  .gradient-neurolog {
-    background: linear-gradient(135deg, theme('colors.blue.500'), theme('colors.purple.600'));
-  }
-
-  .gradient-neurolog-light {
-    background: linear-gradient(135deg, theme('colors.blue.50'), theme('colors.purple.50'));
-  }
-
-  /* Layout responsive para dashboard */
+  /* Layout responsivo para dashboard */
   .dashboard-grid {
-    @apply grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4;
+    @apply grid gap-4 sm:gap-6;
+    @apply grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4;
   }
 
-  /* Contenedor principal */
+  /* Cards específicas para dashboard */
+  .dashboard-card {
+    @apply bg-card rounded-lg border border-border p-4 sm:p-6 shadow-sm;
+    @apply transition-all duration-200 hover:shadow-md;
+  }
+
+  /* Contenedor principal responsivo */
   .main-container {
     @apply mx-auto max-w-7xl px-4 sm:px-6 lg:px-8;
+  }
+
+  /* Espaciado de sección responsivo */
+  .section-spacing {
+    @apply py-8 sm:py-12 lg:py-16;
   }
 
   /* Texto con truncado elegante */
@@ -259,22 +268,88 @@
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
-}
 
-
-@layer utilities {
-  /* Clases de spacing específicas para el proyecto */
-  .section-padding {
-    @apply py-12 sm:py-16 lg:py-20;
+  /* Formularios responsivos */
+  .form-grid {
+    @apply grid gap-4 sm:gap-6;
+    @apply grid-cols-1 sm:grid-cols-2 lg:grid-cols-3;
   }
 
-  .card-padding {
-    @apply p-4 sm:p-6;
+  .form-section {
+    @apply space-y-4 p-4 sm:p-6 border border-border rounded-lg;
+  }
+
+  /* Navegación responsiva */
+  .nav-mobile {
+    @apply flex flex-col space-y-1 p-4;
+  }
+
+  .nav-desktop {
+    @apply hidden lg:flex lg:items-center lg:space-x-6;
   }
 
   /* Estados de interacción mejorados */
   .interactive {
-    @apply transition-all duration-200 hover:scale-[1.02] active:scale-[0.98];
+    @apply transition-all duration-200;
+    @apply hover:scale-[1.02] active:scale-[0.98];
+    /* En móviles, usar solo cambios sutiles */
+    @media (hover: none) {
+      @apply hover:scale-100 active:scale-[0.98];
+    }
+  }
+
+  /* Tabla responsiva */
+  .table-responsive {
+    @apply w-full overflow-auto;
+  }
+
+  .table-responsive table {
+    @apply min-w-full;
+  }
+
+  .table-responsive td {
+    @apply whitespace-nowrap px-3 py-2 text-sm;
+  }
+
+  /* Mobile-first media query helpers */
+  .mobile-only {
+    @apply block sm:hidden;
+  }
+
+  .tablet-up {
+    @apply hidden sm:block;
+  }
+
+  .desktop-only {
+    @apply hidden lg:block;
+  }
+
+  /* Touch-friendly buttons */
+  .touch-button {
+    @apply min-h-[44px] min-w-[44px] flex items-center justify-center;
+  }
+}
+
+@layer utilities {
+  /* Utilidades de spacing responsivo */
+  .spacing-xs {
+    @apply p-2 sm:p-3;
+  }
+
+  .spacing-sm {
+    @apply p-3 sm:p-4;
+  }
+
+  .spacing-md {
+    @apply p-4 sm:p-6;
+  }
+
+  .spacing-lg {
+    @apply p-6 sm:p-8;
+  }
+
+  .spacing-xl {
+    @apply p-8 sm:p-12;
   }
 
   /* Texto con mejor legibilidad */
@@ -282,17 +357,57 @@
     text-wrap: balance;
   }
 
-  /* Clases para debugging (solo en desarrollo) */
-  .debug-red {
-    @apply border-2 border-red-500 bg-red-100;
+  /* Safe area para dispositivos con notch */
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
   }
 
-  .debug-blue {
-    @apply border-2 border-blue-500 bg-blue-100;
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
   }
 
-  .debug-green {
-    @apply border-2 border-green-500 bg-green-100;
+  .safe-left {
+    padding-left: env(safe-area-inset-left);
+  }
+
+  .safe-right {
+    padding-right: env(safe-area-inset-right);
+  }
+
+  /* Clases para debugging responsivo */
+  .debug-breakpoint::before {
+    content: 'XS';
+    @apply fixed top-0 right-0 bg-red-500 text-white px-2 py-1 text-xs z-50;
+  }
+
+  @screen sm {
+    .debug-breakpoint::before {
+      content: 'SM';
+    }
+  }
+
+  @screen md {
+    .debug-breakpoint::before {
+      content: 'MD';
+    }
+  }
+
+  @screen lg {
+    .debug-breakpoint::before {
+      content: 'LG';
+    }
+  }
+
+  @screen xl {
+    .debug-breakpoint::before {
+      content: 'XL';
+    }
+  }
+
+  @screen 2xl {
+    .debug-breakpoint::before {
+      content: '2XL';
+    }
   }
 
   /* Print styles */
@@ -304,49 +419,141 @@
     .print-only {
       @apply block;
     }
+
+    /* Optimizar para impresión */
+    * {
+      -webkit-print-color-adjust: exact !important;
+      color-adjust: exact !important;
+    }
   }
 }
 
-
-.log-form {
-  @apply space-y-6;
+/* Animaciones específicas para NeuroLog */
+.fade-in {
+  animation: fadeIn 0.3s ease-in-out;
 }
 
-.log-form .form-section {
-  @apply space-y-4 p-4 border border-border rounded-lg;
+.slide-in-up {
+  animation: slideInUp 0.4s ease-out;
 }
 
-/* Estilos para las tarjetas de niños */
+.slide-in-down {
+  animation: slideInDown 0.4s ease-out;
+}
+
+.slide-in-left {
+  animation: slideInLeft 0.4s ease-out;
+}
+
+.slide-in-right {
+  animation: slideInRight 0.4s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideInUp {
+  from {
+    transform: translateY(10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideInDown {
+  from {
+    transform: translateY(-10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* Componentes específicos de NeuroLog */
+.neurolog-gradient {
+  background: linear-gradient(135deg, theme('colors.blue.500'), theme('colors.purple.600'));
+}
+
+.neurolog-gradient-light {
+  background: linear-gradient(135deg, theme('colors.blue.50'), theme('colors.purple.50'));
+}
+
+/* Cards de niños responsivas */
 .child-card {
-  @apply relative overflow-hidden rounded-lg border border-border bg-card p-6 shadow-sm transition-all hover:shadow-md;
+  @apply relative overflow-hidden rounded-lg border border-border bg-card shadow-sm;
+  @apply p-4 sm:p-6 transition-all hover:shadow-md;
 }
 
 .child-card .avatar {
-  @apply h-16 w-16 rounded-full border-2 border-primary/20;
+  @apply h-12 w-12 sm:h-16 sm:w-16 rounded-full border-2 border-primary/20;
 }
 
-/* Estilos para los gráficos y reportes */
+/* Gráficos responsivos */
 .chart-container {
   @apply w-full overflow-hidden rounded-lg border border-border bg-card;
+  min-height: 200px;
 }
 
 .chart-title {
-  @apply text-lg font-semibold text-foreground;
+  @apply text-base sm:text-lg font-semibold text-foreground;
 }
 
 .chart-subtitle {
-  @apply text-sm text-muted-foreground;
+  @apply text-xs sm:text-sm text-muted-foreground;
 }
 
-/* Responsive breakpoints específicos */
-@media (max-width: 640px) {
-  .mobile-stack {
-    @apply flex flex-col space-y-4;
+/* Formularios de log responsivos */
+.log-form {
+  @apply space-y-4 sm:space-y-6;
+}
+
+.log-form .form-section {
+  @apply space-y-3 sm:space-y-4 p-3 sm:p-4 border border-border rounded-lg;
+}
+
+/* Optimizaciones para dispositivos táctiles */
+@media (hover: none) and (pointer: coarse) {
+  /* Reducir efectos hover en dispositivos táctiles */
+  .hover\:scale-105:hover {
+    transform: none;
   }
-}
-
-@media (min-width: 1024px) {
-  .desktop-grid {
-    @apply grid grid-cols-12 gap-8;
+  
+  /* Aumentar áreas de toque */
+  button, a, [role="button"] {
+    min-height: 44px;
+    min-width: 44px;
   }
 }
