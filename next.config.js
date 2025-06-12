@@ -59,19 +59,17 @@ const nextConfig = {
     ];
   },
 
-  // Redirects para mejorar UX
+  // Redirects corregidos - SOLO rutas que realmente necesitan redirect
   async redirects() {
     return [
-      {
-        source: '/',
-        destination: '/dashboard',
-        permanent: false,
-      },
       {
         source: '/auth',
         destination: '/auth/login',
         permanent: false,
       }
+      // ✅ REMOVIDO: El redirect de '/' a '/dashboard' 
+      // ✅ Ahora la landing page se mostrará normalmente
+      // ✅ El middleware maneja la redirección solo para usuarios autenticados
     ];
   },
 

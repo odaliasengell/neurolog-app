@@ -1,13 +1,15 @@
+// src/app/auth/login/page.tsx
+// Página de login actualizada para Supabase v2 y Next.js 15
+
 'use client'
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
-import { useToast } from '@/components/ui/use-toast'
 import { Loader2, Mail, Lock, Eye, EyeOff } from 'lucide-react'
 import Link from 'next/link'
 
@@ -16,13 +18,14 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
-  const { toast } = useToast()
-  const supabase = createClientComponentClient()
+  const supabase = createClient()
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
+    setError(null)
 
     try {
       const { error } = await supabase.auth.signInWithPassword({
@@ -32,19 +35,12 @@ export default function LoginPage() {
 
       if (error) throw error
 
-      toast({
-        title: "¡Bienvenido!",
-        description: "Has iniciado sesión correctamente.",
-      })
-
+      // Redirigir al dashboard
       router.push('/dashboard')
       router.refresh()
-    } catch (error: any) {
-      toast({
-        title: "Error de autenticación",
-        description: error.message || "No se pudo iniciar sesión",
-        variant: "destructive",
-      })
+    } catch (err: any) {
+      console.error('Error signing in:', err)
+      setError(err.message || 'Error al iniciar sesión')
     } finally {
       setLoading(false)
     }
@@ -59,13 +55,19 @@ export default function LoginPage() {
               <span className="text-white font-bold text-xl">NL</span>
             </div>
           </div>
-          <CardTitle className="text-2xl text-center">NeuroLog</CardTitle>
+          <CardTitle className="text-2xl text-center">Iniciar Sesión</CardTitle>
           <CardDescription className="text-center">
-            Inicia sesión en tu cuenta
+            Ingresa tus credenciales para acceder a NeuroLog
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSignIn} className="space-y-4">
+            {error && (
+              <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md">
+                {error}
+              </div>
+            )}
+            
             <div className="space-y-2">
               <Label htmlFor="email">Correo electrónico</Label>
               <div className="relative">
@@ -73,11 +75,12 @@ export default function LoginPage() {
                 <Input
                   id="email"
                   type="email"
-                  placeholder="tu.email@ejemplo.com"
+                  placeholder="tu@email.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="pl-10"
                   required
+                  disabled={loading}
                 />
               </div>
             </div>
@@ -94,52 +97,55 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   className="pl-10 pr-10"
                   required
+                  disabled={loading}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-3 h-4 w-4 text-gray-400 hover:text-gray-600"
+                  className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
+                  disabled={loading}
                 >
-                  {showPassword ? <EyeOff /> : <Eye />}
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
             </div>
-
-            <Button 
-              type="submit" 
-              className="w-full" 
-              disabled={loading}
-            >
+            
+            <Button type="submit" className="w-full" disabled={loading}>
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Iniciando sesión...
                 </>
               ) : (
-                'Iniciar sesión'
+                'Iniciar Sesión'
               )}
             </Button>
           </form>
-
-          <div className="mt-6 text-center">
-            <p className="text-sm text-gray-600">
-              ¿No tienes una cuenta?{' '}
+          
+          <div className="mt-6 space-y-4">
+            <div className="text-center">
               <Link 
-                href="/auth/register" 
-                className="text-blue-600 hover:underline font-medium"
+                href="/auth/reset-password" 
+                className="text-sm text-blue-600 hover:text-blue-500"
               >
-                Regístrate aquí
+                ¿Olvidaste tu contraseña?
               </Link>
-            </p>
-          </div>
-
-          <div className="mt-4 text-center">
-            <Link 
-              href="/auth/forgot-password" 
-              className="text-sm text-gray-600 hover:underline"
-            >
-              ¿Olvidaste tu contraseña?
-            </Link>
+            </div>
+            
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-300" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-white px-2 text-gray-500">¿No tienes cuenta?</span>
+              </div>
+            </div>
+            
+            <Button variant="outline" className="w-full" asChild>
+              <Link href="/auth/register">
+                Crear cuenta nueva
+              </Link>
+            </Button>
           </div>
         </CardContent>
       </Card>

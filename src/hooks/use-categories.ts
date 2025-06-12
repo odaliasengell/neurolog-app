@@ -1,8 +1,10 @@
 // src/hooks/use-categories.ts
+// Hook actualizado para gestión de categorías con Supabase v2
+
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createClient } from '@/lib/supabase'
 
 interface Category {
   id: string
@@ -10,33 +12,56 @@ interface Category {
   description: string | null
   color: string
   icon: string
+  is_active: boolean
+  sort_order: number
   created_at: string
 }
 
-export function useCategories() {
+interface UseCategoriesReturn {
+  categories: Category[]
+  loading: boolean
+  error: string | null
+  fetchCategories: () => Promise<void>
+  refreshCategories: () => Promise<void>
+}
+
+export function useCategories(): UseCategoriesReturn {
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const supabase = createClientComponentClient()
+  const supabase = createClient()
 
-  const fetchCategories = async () => {
+  const fetchCategories = async (): Promise<void> => {
     try {
       setLoading(true)
+      setError(null)
+      
+      console.log('📚 Fetching categories...')
+      
       const { data, error } = await supabase
         .from('categories')
         .select('*')
-        .order('name')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true })
 
-      if (error) throw error
+      if (error) {
+        console.error('❌ Error fetching categories:', error)
+        throw error
+      }
 
+      console.log('✅ Categories fetched successfully:', data?.length || 0)
       setCategories(data || [])
-      setError(null)
     } catch (err: any) {
-      setError(err.message)
-      console.error('Error fetching categories:', err)
+      const errorMessage = err.message || 'Error al cargar las categorías'
+      setError(errorMessage)
+      console.error('❌ Error in fetchCategories:', err)
     } finally {
       setLoading(false)
     }
+  }
+
+  const refreshCategories = async (): Promise<void> => {
+    await fetchCategories()
   }
 
   useEffect(() => {
@@ -47,6 +72,7 @@ export function useCategories() {
     categories,
     loading,
     error,
-    fetchCategories
+    fetchCategories,
+    refreshCategories
   }
 }
