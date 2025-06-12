@@ -26,20 +26,13 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { useChildren } from '@/hooks/use-children';
 import { useLogs } from '@/hooks/use-logs';
 import type { 
-  ChildWithRelation, 
-  UserChildRelation, 
-  LogWithDetails,
-  EmergencyContact,
-  Profile
+  ChildWithRelation
 } from '@/types';
 import { 
   EditIcon,
   MoreVerticalIcon,
   UserPlusIcon,
   CalendarIcon,
-  HeartIcon,
-  PhoneIcon,
-  MapPinIcon,
   BookOpenIcon,
   TrendingUpIcon,
   BarChart3Icon,
@@ -52,12 +45,10 @@ import {
   EyeIcon,
   GraduationCapIcon,
   ShieldIcon,
-  FileIcon,
-  MessageSquareIcon,
   ClockIcon,
   ArrowLeftIcon
 } from 'lucide-react';
-import { format, differenceInYears, subDays, subWeeks, subMonths } from 'date-fns';
+import { format, differenceInYears, subMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 export default function ChildDetailPage() {
