@@ -1,7 +1,9 @@
 // src/app/dashboard/settings/page.tsx
+// Página de configuración CORREGIDA - Usa el contexto de usuario correcto
+
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,17 +20,20 @@ import {
   Download,
   Trash2,
   Save,
-  Eye
+  Eye,
+  Loader2
 } from 'lucide-react'
 
 export default function SettingsPage() {
-  const { profile, refreshProfile } = useAuth()
+  // ✅ CORREGIDO: Usar 'user' en lugar de 'profile'
+  const { user, updateProfile, refreshUser, loading: authLoading } = useAuth()
   const { toast } = useToast()
   
+  // ✅ Estado del perfil inicializado correctamente desde el usuario
   const [profileData, setProfileData] = useState({
-    full_name: profile?.full_name || '',
-    email: profile?.email || '',
-    role: profile?.role || 'parent'
+    full_name: '',
+    email: '',
+    role: 'parent' as const
   })
 
   const [preferences, setPreferences] = useState({
@@ -41,13 +46,37 @@ export default function SettingsPage() {
   const [isEditing, setIsEditing] = useState(false)
   const [loading, setLoading] = useState(false)
 
+  // ✅ EFECTO PARA SINCRONIZAR DATOS DEL USUARIO
+  useEffect(() => {
+    if (user) {
+      console.log('👤 Setting profile data from user:', user.full_name);
+      setProfileData({
+        full_name: user.full_name || '',
+        email: user.email || '',
+        role: user.role || 'parent'
+      })
+    }
+  }, [user])
+
+  // ✅ FUNCIÓN CORREGIDA PARA GUARDAR PERFIL
   const handleSaveProfile = async () => {
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "No hay usuario autenticado.",
+        variant: "destructive"
+      })
+      return
+    }
+
     setLoading(true)
     try {
-      // Aquí iría la lógica para actualizar el perfil
-      // const { error } = await supabase.from('profiles').update(profileData).eq('id', profile.id)
-      
-      await new Promise(resolve => setTimeout(resolve, 1000)) // Simulación
+      // ✅ USAR updateProfile del contexto
+      await updateProfile({
+        full_name: profileData.full_name,
+        role: profileData.role,
+        updated_at: new Date().toISOString()
+      })
       
       toast({
         title: "¡Perfil actualizado!",
@@ -55,15 +84,52 @@ export default function SettingsPage() {
       })
       
       setIsEditing(false)
-      refreshProfile()
+      
+      // ✅ Refrescar datos del usuario
+      await refreshUser()
+    } catch (error: any) {
+      console.error('Error updating profile:', error)
+      toast({
+        title: "Error al actualizar",
+        description: error.message || "No se pudieron guardar los cambios.",
+        variant: "destructive"
+      })
     } finally {
       setLoading(false)
     }
   }
 
+  const handleCancelEdit = () => {
+    // ✅ Restaurar datos originales del usuario
+    if (user) {
+      setProfileData({
+        full_name: user.full_name || '',
+        email: user.email || '',
+        role: user.role || 'parent'
+      })
+    }
+    setIsEditing(false)
+  }
+
   const handleExportData = () => {
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "No hay datos de usuario para exportar.",
+        variant: "destructive"
+      })
+      return
+    }
+
     const userData = {
-      perfil: profileData,
+      perfil: {
+        id: user.id,
+        nombre_completo: user.full_name,
+        email: user.email,
+        rol: user.role,
+        fecha_registro: user.created_at,
+        ultima_actualizacion: user.updated_at
+      },
       preferencias: preferences,
       fecha_exportacion: new Date().toISOString()
     }
@@ -73,7 +139,7 @@ export default function SettingsPage() {
     const url = URL.createObjectURL(dataBlob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `datos_neurolog_${new Date().toISOString().split('T')[0]}.json`
+    link.download = `datos_neurolog_${user.full_name?.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.json`
     link.click()
     URL.revokeObjectURL(url)
 
@@ -81,6 +147,18 @@ export default function SettingsPage() {
       title: "Datos exportados",
       description: "Tus datos se han descargado correctamente.",
     })
+  }
+
+  // ✅ MOSTRAR LOADING SI NO HAY USUARIO O ESTÁ CARGANDO
+  if (authLoading || !user) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="flex flex-col items-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+          <p className="text-gray-600">Cargando configuración...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -92,6 +170,31 @@ export default function SettingsPage() {
           Gestiona tu perfil y preferencias de la aplicación
         </p>
       </div>
+
+      {/* ✅ INFORMACIÓN DEL USUARIO ACTUAL */}
+      <Card className="bg-blue-50 border-blue-200">
+        <CardContent className="pt-6">
+          <div className="flex items-center space-x-4">
+            <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center">
+              <span className="text-white font-bold text-lg">
+                {user.full_name?.charAt(0)?.toUpperCase() || 'U'}
+              </span>
+            </div>
+            <div>
+              <p className="font-medium text-gray-900">
+                {user.full_name || 'Usuario'}
+              </p>
+              <p className="text-sm text-gray-600">{user.email}</p>
+              <p className="text-xs text-blue-600 capitalize">
+                {user.role === 'parent' ? 'Padre/Madre' :
+                 user.role === 'teacher' ? 'Docente' :
+                 user.role === 'specialist' ? 'Especialista' : 
+                 user.role === 'admin' ? 'Administrador' : 'Usuario'}
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Perfil de Usuario */}
       <Card>
@@ -113,6 +216,7 @@ export default function SettingsPage() {
                 value={profileData.full_name}
                 onChange={(e) => setProfileData(prev => ({ ...prev, full_name: e.target.value }))}
                 disabled={!isEditing}
+                placeholder="Ingresa tu nombre completo"
               />
             </div>
 
@@ -122,9 +226,12 @@ export default function SettingsPage() {
                 id="email"
                 type="email"
                 value={profileData.email}
-                onChange={(e) => setProfileData(prev => ({ ...prev, email: e.target.value }))}
-                disabled={!isEditing}
+                disabled={true} // Email no se puede cambiar
+                className="bg-gray-50"
               />
+              <p className="text-xs text-gray-500">
+                El correo electrónico no se puede modificar
+              </p>
             </div>
           </div>
 
@@ -142,6 +249,9 @@ export default function SettingsPage() {
                 <SelectItem value="parent">Padre/Madre</SelectItem>
                 <SelectItem value="teacher">Docente</SelectItem>
                 <SelectItem value="specialist">Especialista</SelectItem>
+                {user.role === 'admin' && (
+                  <SelectItem value="admin">Administrador</SelectItem>
+                )}
               </SelectContent>
             </Select>
           </div>
@@ -151,15 +261,19 @@ export default function SettingsPage() {
               <>
                 <Button
                   variant="outline"
-                  onClick={() => setIsEditing(false)}
+                  onClick={handleCancelEdit}
                   disabled={loading}
                 >
                   Cancelar
                 </Button>
-                <Button onClick={handleSaveProfile} disabled={loading}>
+                <Button 
+                  onClick={handleSaveProfile} 
+                  disabled={loading}
+                  className="min-w-[120px]"
+                >
                   {loading ? (
                     <>
-                      <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                       Guardando...
                     </>
                   ) : (
@@ -172,6 +286,7 @@ export default function SettingsPage() {
               </>
             ) : (
               <Button onClick={() => setIsEditing(true)}>
+                <Eye className="h-4 w-4 mr-2" />
                 Editar Perfil
               </Button>
             )}
@@ -179,7 +294,7 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Preferencias */}
+      {/* Preferencias de Notificaciones */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center">
@@ -190,17 +305,17 @@ export default function SettingsPage() {
             Controla cómo y cuándo recibes notificaciones
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <div className="text-base font-medium">Notificaciones en la app</div>
-              <div className="text-sm text-gray-500">
+              <Label className="text-base">Notificaciones en la app</Label>
+              <p className="text-sm text-gray-500">
                 Recibir notificaciones dentro de la aplicación
-              </div>
+              </p>
             </div>
             <Switch
               checked={preferences.notifications}
-              onCheckedChange={(checked) => 
+              onCheckedChange={(checked) =>
                 setPreferences(prev => ({ ...prev, notifications: checked }))
               }
             />
@@ -208,14 +323,14 @@ export default function SettingsPage() {
 
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <div className="text-base font-medium">Alertas por email</div>
-              <div className="text-sm text-gray-500">
+              <Label className="text-base">Alertas por email</Label>
+              <p className="text-sm text-gray-500">
                 Recibir alertas importantes por correo electrónico
-              </div>
+              </p>
             </div>
             <Switch
               checked={preferences.emailAlerts}
-              onCheckedChange={(checked) => 
+              onCheckedChange={(checked) =>
                 setPreferences(prev => ({ ...prev, emailAlerts: checked }))
               }
             />
@@ -223,14 +338,14 @@ export default function SettingsPage() {
 
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <div className="text-base font-medium">Reportes semanales</div>
-              <div className="text-sm text-gray-500">
-                Recibir resumen semanal de actividad
-              </div>
+              <Label className="text-base">Reportes semanales</Label>
+              <p className="text-sm text-gray-500">
+                Recibir resumen semanal de actividades
+              </p>
             </div>
             <Switch
               checked={preferences.weeklyReports}
-              onCheckedChange={(checked) => 
+              onCheckedChange={(checked) =>
                 setPreferences(prev => ({ ...prev, weeklyReports: checked }))
               }
             />
@@ -238,69 +353,45 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Privacidad y Seguridad */}
+      {/* Privacidad y Datos */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center">
             <Shield className="h-5 w-5 mr-2" />
-            Privacidad y Seguridad
+            Privacidad y Datos
           </CardTitle>
           <CardDescription>
             Gestiona tus datos y configuración de privacidad
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <div className="text-base font-medium">Compartir datos anónimos</div>
-              <div className="text-sm text-gray-500">
-                Ayudar a mejorar la aplicación compartiendo datos anónimos
-              </div>
+              <Label className="text-base">Compartir datos para investigación</Label>
+              <p className="text-sm text-gray-500">
+                Permitir uso anónimo de datos para mejorar el servicio
+              </p>
             </div>
             <Switch
               checked={preferences.dataSharing}
-              onCheckedChange={(checked) => 
+              onCheckedChange={(checked) =>
                 setPreferences(prev => ({ ...prev, dataSharing: checked }))
               }
             />
           </div>
 
-          <div className="space-y-4 pt-4 border-t">
-            <Button onClick={handleExportData} variant="outline" className="w-full">
+          <div className="pt-4 border-t">
+            <Button 
+              onClick={handleExportData}
+              variant="outline"
+              className="w-full"
+            >
               <Download className="h-4 w-4 mr-2" />
               Exportar mis datos
             </Button>
-            
-            <Button variant="outline" className="w-full" disabled>
-              <Eye className="h-4 w-4 mr-2" />
-              Cambiar contraseña
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Información del Sistema */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center">
-            <Settings className="h-5 w-5 mr-2" />
-            Información del Sistema
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 text-sm">
-            <div className="flex justify-between">
-              <span className="text-gray-600">Versión de la aplicación:</span>
-              <span className="font-medium">1.0.0</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Última actualización:</span>
-              <span className="font-medium">Hoy</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Proyecto académico:</span>
-              <span className="font-medium">Arquitectura del Software 2025</span>
-            </div>
+            <p className="text-xs text-gray-500 mt-2">
+              Descarga una copia de todos tus datos en formato JSON
+            </p>
           </div>
         </CardContent>
       </Card>
@@ -317,18 +408,13 @@ export default function SettingsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            <div className="p-4 bg-red-50 rounded-lg">
-              <h4 className="font-medium text-red-800 mb-2">Eliminar cuenta</h4>
-              <p className="text-sm text-red-600 mb-4">
-                Esto eliminará permanentemente tu cuenta y todos los datos asociados. 
-                Esta acción no se puede deshacer.
-              </p>
-              <Button variant="destructive" size="sm" disabled>
-                Eliminar mi cuenta
-              </Button>
-            </div>
-          </div>
+          <Button variant="destructive" disabled>
+            <Trash2 className="h-4 w-4 mr-2" />
+            Eliminar cuenta
+          </Button>
+          <p className="text-xs text-gray-500 mt-2">
+            Funcionalidad disponible próximamente
+          </p>
         </CardContent>
       </Card>
     </div>

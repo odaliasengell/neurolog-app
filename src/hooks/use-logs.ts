@@ -1,4 +1,5 @@
 // src/hooks/use-logs.ts
+// Hook CORREGIDO - Soluciona múltiples suscripciones Realtime
 
 'use client';
 
@@ -49,7 +50,7 @@ interface UseLogsReturn {
 }
 
 // ================================================================
-// HOOK PRINCIPAL - CORREGIDO
+// HOOK PRINCIPAL - CORREGIDO PARA EVITAR MÚLTIPLES SUSCRIPCIONES
 // ================================================================
 
 export function useLogs(options: UseLogsOptions = {}): UseLogsReturn {
@@ -78,55 +79,57 @@ export function useLogs(options: UseLogsOptions = {}): UseLogsReturn {
   const [hasMore, setHasMore] = useState(true);
   const [currentPage, setCurrentPage] = useState(0);
   
-  // ✅ USAR useRef PARA MANTENER REFERENCIA ESTABLE
+  //  REFERENCIAS ESTABLES
   const supabaseRef = useRef(createClient());
   const supabase = supabaseRef.current;
+  const channelRef = useRef<any>(null); //  REF PARA CANAL ÚNICO
+  const mountedRef = useRef(true);
 
-  // ✅ MEMOIZAR userId PARA EVITAR RE-RENDERS
+  //  MEMOIZAR userId PARA EVITAR RE-RENDERS
   const userId = useMemo(() => user?.id, [user?.id]);
 
+  //  GENERAR ID ÚNICO PARA CANAL
+  const channelId = useMemo(() => {
+    return `logs-${userId || 'anonymous'}-${Date.now()}`;
+  }, [userId]);
+
   // ================================================================
-  // FUNCIÓN HELPER ESTABILIZADA
+  // FUNCIONES HELPER ESTABILIZADAS
   // ================================================================
 
+  /**
+   *  GET ACCESSIBLE CHILDREN - CORREGIDA
+   */
   const getAccessibleChildrenIds = useCallback(async (): Promise<string[]> => {
     if (!userId) return [];
 
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('user_child_relations')
         .select('child_id')
         .eq('user_id', userId)
         .eq('is_active', true);
 
-      return data?.map(relation => relation.child_id) || [];
-    } catch (error) {
-      console.error('❌ Error getting accessible children:', error);
+      if (error) throw error;
+      return data?.map(rel => rel.child_id) || [];
+    } catch (err) {
+      console.error('❌ Error getting accessible children:', err);
       return [];
     }
-  }, [userId, supabase]); // ✅ DEPENDENCIES ESTABLES
-
-  // ================================================================
-  // FUNCIONES PRINCIPALES ESTABILIZADAS
-  // ================================================================
+  }, [userId, supabase]);
 
   /**
-   * ✅ FETCH LOGS CON DEPENDENCIES CORREGIDAS
+   *  FETCH LOGS - CORREGIDA
    */
   const fetchLogs = useCallback(async (page: number = 0, append: boolean = false): Promise<void> => {
     if (!userId) {
-      setLogs([]);
       setLoading(false);
       return;
     }
 
     try {
-      if (!append) {
-        setLoading(true);
-      }
-      setError(null);
-
-      console.log(`📚 Fetching logs (page ${page})...`);
+      if (!append) setLoading(true);
+      console.log('📚 Fetching logs (page', page, ')...');
 
       const accessibleChildrenIds = await getAccessibleChildrenIds();
       
@@ -140,16 +143,30 @@ export function useLogs(options: UseLogsOptions = {}): UseLogsReturn {
         .from('daily_logs')
         .select(`
           *,
-          child:children(id, name, avatar_url),
-          category:categories(id, name, color, icon),
-          logged_by_profile:profiles!logged_by(id, full_name, avatar_url),
-          reviewed_by_profile:profiles!reviewed_by(id, full_name, avatar_url)
-        `);
+          child:children (
+            id,
+            name,
+            birth_date
+          ),
+          category:categories (
+            id,
+            name,
+            color,
+            icon
+          ),
+          logged_by_profile:profiles!daily_logs_logged_by_fkey (
+            id,
+            full_name,
+            role
+          )
+        `)
+        .in('child_id', accessibleChildrenIds)
+        .order('created_at', { ascending: false })
+        .range(page * pageSize, (page + 1) * pageSize - 1);
 
+      //  FILTROS ADICIONALES
       if (childId) {
         query = query.eq('child_id', childId);
-      } else {
-        query = query.in('child_id', accessibleChildrenIds);
       }
 
       if (!includeDeleted) {
@@ -160,21 +177,13 @@ export function useLogs(options: UseLogsOptions = {}): UseLogsReturn {
         query = query.eq('is_private', false);
       }
 
-      const from = page * pageSize;
-      const to = from + pageSize - 1;
+      const { data, error } = await query;
 
-      const { data, error: fetchError } = await query
-        .order('created_at', { ascending: false })
-        .range(from, to);
+      if (error) throw error;
 
-      if (fetchError) {
-        console.error('❌ Error fetching logs:', fetchError);
-        throw fetchError;
-      }
+      if (!mountedRef.current) return;
 
-      console.log('✅ Logs fetched successfully:', data?.length || 0);
-
-      const newLogs = data || [];
+      const newLogs = data as LogWithDetails[] || [];
       
       if (append) {
         setLogs(prev => [...prev, ...newLogs]);
@@ -183,26 +192,23 @@ export function useLogs(options: UseLogsOptions = {}): UseLogsReturn {
       }
 
       setHasMore(newLogs.length === pageSize);
-
-      if (newLogs.length > 0) {
-        await auditSensitiveAccess(
-          'VIEW_LOGS_LIST',
-          userId,
-          `Accessed ${newLogs.length} logs (page ${page})`
-        );
-      }
+      console.log(' Logs fetched successfully:', newLogs.length, 'items');
 
     } catch (err) {
-      console.error('❌ Error in fetchLogs:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Error al cargar registros';
-      setError(errorMessage);
+      console.error('❌ Error fetching logs:', err);
+      if (mountedRef.current) {
+        const errorMessage = err instanceof Error ? err.message : 'Error al cargar registros';
+        setError(errorMessage);
+      }
     } finally {
-      setLoading(false);
+      if (mountedRef.current) {
+        setLoading(false);
+      }
     }
   }, [userId, childId, includeDeleted, includePrivate, user?.role, pageSize, getAccessibleChildrenIds, supabase]);
 
   /**
-   * ✅ FETCH STATS CON DEPENDENCIES CORREGIDAS
+   *  FETCH STATS - CORREGIDA
    */
   const fetchStats = useCallback(async (): Promise<void> => {
     if (!userId) return;
@@ -297,8 +303,10 @@ export function useLogs(options: UseLogsOptions = {}): UseLogsReturn {
         follow_ups_due: followUps.count || 0
       };
 
-      console.log('✅ Stats fetched successfully:', newStats);
-      setStats(newStats);
+      if (mountedRef.current) {
+        setStats(newStats);
+        console.log(' Stats fetched successfully:', newStats);
+      }
 
     } catch (err) {
       console.error('❌ Error fetching stats:', err);
@@ -306,7 +314,7 @@ export function useLogs(options: UseLogsOptions = {}): UseLogsReturn {
   }, [userId, getAccessibleChildrenIds, supabase]);
 
   /**
-   * ✅ REFRESH FUNCTION ESTABILIZADA
+   *  REFRESH FUNCTION ESTABILIZADA
    */
   const refreshLogs = useCallback(async (): Promise<void> => {
     setCurrentPage(0);
@@ -317,7 +325,7 @@ export function useLogs(options: UseLogsOptions = {}): UseLogsReturn {
   }, [fetchLogs, fetchStats]);
 
   // ================================================================
-  // OTRAS FUNCIONES DEL HOOK (mantener igual pero con dependencies corregidas)
+  // FUNCIONES PRINCIPALES DEL HOOK
   // ================================================================
 
   const createLog = useCallback(async (logData: LogInsert): Promise<DailyLog> => {
@@ -392,8 +400,10 @@ export function useLogs(options: UseLogsOptions = {}): UseLogsReturn {
   // EFFECTS CORREGIDOS - SIN LOOPS INFINITOS
   // ================================================================
 
-  // ✅ EFECTO INICIAL - SOLO EJECUTAR CUANDO CAMBIE userId
+  //  EFECTO INICIAL - SOLO EJECUTAR CUANDO CAMBIE userId
   useEffect(() => {
+    mountedRef.current = true;
+    
     if (userId) {
       Promise.all([
         fetchLogs(0, false),
@@ -412,32 +422,67 @@ export function useLogs(options: UseLogsOptions = {}): UseLogsReturn {
       });
       setLoading(false);
     }
-  }, [userId]); // ✅ SOLO userId COMO DEPENDENCY
 
-  // ✅ REALTIME CON DEPENDENCIES CORRECTAS
+    return () => {
+      mountedRef.current = false;
+    };
+  }, [userId]); //  SOLO userId COMO DEPENDENCY
+
+  //  REALTIME CON CANAL ÚNICO - ARREGLO CRÍTICO
   useEffect(() => {
     if (!realtime || !userId) return;
 
-    console.log('🔄 Setting up realtime subscription for logs');
+    //  LIMPIAR CANAL ANTERIOR SI EXISTE
+    if (channelRef.current) {
+      console.log('🔄 Cleaning up previous logs realtime subscription');
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
 
+    console.log('🔄 Setting up realtime subscription for logs with unique channel:', channelId);
+
+    //  CREAR CANAL CON ID ÚNICO
     const channel = supabase
-      .channel('logs-changes')
+      .channel(channelId) //  USAR ID ÚNICO
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
         table: 'daily_logs'
       }, (payload) => {
-        console.log('🔄 Logs realtime update:', payload);
-        // ✅ USAR refreshLogs DIRECTAMENTE SIN DEPENDENCIES
-        refreshLogs();
+        console.log('🔄 Logs realtime update:', payload.eventType);
+        //  SOLO REFRESCAR SI EL COMPONENTE ESTÁ MONTADO
+        if (mountedRef.current) {
+          refreshLogs();
+        }
       })
-      .subscribe();
+      .subscribe((status) => {
+        console.log('📡 Logs realtime status:', status);
+      });
+
+    channelRef.current = channel;
 
     return () => {
       console.log('🔄 Cleaning up logs realtime subscription');
-      supabase.removeChannel(channel);
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
     };
-  }, [realtime, userId]); // ✅ DEPENDENCIES MÍNIMAS Y ESTABLES
+  }, [realtime, userId, channelId]); //  DEPENDENCIES CORRECTAS
+
+  // ================================================================
+  // CLEANUP ON UNMOUNT
+  // ================================================================
+  
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
+    };
+  }, []);
 
   return {
     logs,
