@@ -1,10 +1,8 @@
-// src/types/index.ts
-// Tipos actualizados basados en el nuevo modelo de base de datos
-
 // ================================================================
+// src/types/index.ts - TIPOS ACTUALIZADOS PARA NUEVA BD
+// ================================================================
+
 // TIPOS BASE Y ENUMS
-// ================================================================
-
 export type UserRole = 'parent' | 'teacher' | 'specialist' | 'admin';
 export type RelationshipType = 'parent' | 'teacher' | 'specialist' | 'observer' | 'family';
 export type IntensityLevel = 'low' | 'medium' | 'high';
@@ -112,7 +110,6 @@ export interface ChildInsert {
   medical_info?: MedicalInfo;
   educational_info?: EducationalInfo;
   privacy_settings?: PrivacySettings;
-  created_by: string;
 }
 
 export interface ChildUpdate {
@@ -125,18 +122,12 @@ export interface ChildUpdate {
   medical_info?: MedicalInfo;
   educational_info?: EducationalInfo;
   privacy_settings?: PrivacySettings;
+  is_active?: boolean;
 }
 
 // ================================================================
 // RELATION TYPES
 // ================================================================
-
-export interface NotificationPreferences {
-  email: boolean;
-  push: boolean;
-  daily_summary?: boolean;
-  weekly_report?: boolean;
-}
 
 export interface UserChildRelation {
   id: string;
@@ -152,7 +143,7 @@ export interface UserChildRelation {
   expires_at?: string | null;
   is_active: boolean;
   notes?: string | null;
-  notification_preferences: NotificationPreferences;
+  notification_preferences: Record<string, any>;
   created_at: string;
 }
 
@@ -164,21 +155,26 @@ export interface RelationInsert {
   can_view?: boolean;
   can_export?: boolean;
   can_invite_others?: boolean;
+  granted_by: string;
   expires_at?: string | null;
   notes?: string | null;
-  notification_preferences?: NotificationPreferences;
+  notification_preferences?: Record<string, any>;
 }
 
-export interface RelationUpdate {
-  relationship_type?: RelationshipType;
-  can_edit?: boolean;
-  can_view?: boolean;
-  can_export?: boolean;
-  can_invite_others?: boolean;
+// Tipo combinado para niños con información de relación
+export interface ChildWithRelation extends Child {
+  user_id: string;
+  relationship_type: RelationshipType;
+  can_view: boolean;
+  can_edit: boolean;
+  can_export: boolean;
+  can_invite_others: boolean;
+  granted_at: string;
   expires_at?: string | null;
-  is_active?: boolean;
-  notes?: string | null;
-  notification_preferences?: NotificationPreferences;
+  is_relation_active: boolean;
+  relation_created_at: string;
+  relation_expires_at?: string | null;
+  creator_name: string;
 }
 
 // ================================================================
@@ -197,17 +193,17 @@ export interface Category {
   created_at: string;
 }
 
+export interface CategoryInsert {
+  name: string;
+  description?: string | null;
+  color?: string;
+  icon?: string;
+  sort_order?: number;
+}
+
 // ================================================================
 // DAILY LOG TYPES
 // ================================================================
-
-export interface LogAttachment {
-  id: string;
-  name: string;
-  url: string;
-  type: 'image' | 'video' | 'audio' | 'document';
-  size: number;
-}
 
 export interface DailyLog {
   id: string;
@@ -222,7 +218,7 @@ export interface DailyLog {
   is_private: boolean;
   is_deleted: boolean;
   is_flagged: boolean;
-  attachments: LogAttachment[];
+  attachments: any[];
   tags: string[];
   location?: string | null;
   weather?: string | null;
@@ -245,7 +241,7 @@ export interface LogInsert {
   intensity_level?: IntensityLevel;
   log_date?: string;
   is_private?: boolean;
-  attachments?: LogAttachment[];
+  attachments?: any[];
   tags?: string[];
   location?: string | null;
   weather?: string | null;
@@ -254,12 +250,14 @@ export interface LogInsert {
 }
 
 export interface LogUpdate {
+  category_id?: string | null;
   title?: string;
   content?: string;
   mood_score?: number | null;
   intensity_level?: IntensityLevel;
+  log_date?: string;
   is_private?: boolean;
-  attachments?: LogAttachment[];
+  attachments?: any[];
   tags?: string[];
   location?: string | null;
   weather?: string | null;
@@ -269,95 +267,24 @@ export interface LogUpdate {
   follow_up_date?: string | null;
 }
 
-// ================================================================
-// AUDIT TYPES
-// ================================================================
-
-export interface AuditLog {
-  id: string;
-  table_name: string;
-  operation: AuditOperation;
-  record_id?: string | null;
-  user_id?: string | null;
-  user_role?: string | null;
-  old_values?: Record<string, any> | null;
-  new_values?: Record<string, any> | null;
-  changed_fields?: string[] | null;
-  ip_address?: string | null;
-  user_agent?: string | null;
-  session_id?: string | null;
-  risk_level: RiskLevel;
-  created_at: string;
-}
-
-// ================================================================
-// EXTENDED TYPES CON RELACIONES
-// ================================================================
-
-export interface ChildWithRelation extends Child {
-  relationship_type: RelationshipType;
-  can_edit: boolean;
-  can_view: boolean;
-  can_export: boolean;
-  can_invite_others: boolean;
-  granted_at: string;
-  expires_at?: string | null;
-  creator_name: string;
-}
-
+// Tipo combinado para logs con información detallada
 export interface LogWithDetails extends DailyLog {
-  child_name: string;
-  child_avatar_url?: string | null;
-  category_name?: string | null;
-  category_color: string;
-  category_icon: string;
-  logged_by_name: string;
-  logged_by_avatar?: string | null;
-  can_edit: boolean;
-  reviewer_name?: string | null;
-}
-
-export interface CategoryWithStats extends Category {
-  log_count: number;
-  last_used?: string | null;
-  most_active_child?: string | null;
-}
-
-// ================================================================
-// STATISTICS TYPES
-// ================================================================
-
-export interface DashboardStats {
-  total_children: number;
-  total_logs: number;
-  logs_this_week: number;
-  logs_this_month: number;
-  last_log_date?: string | null;
-  avg_mood_score?: number | null;
-  active_categories: number;
-  pending_reviews: number;
-  follow_ups_due: number;
-}
-
-export interface ChildLogStatistics {
-  child_id: string;
-  child_name: string;
-  total_logs: number;
-  logs_this_week: number;
-  logs_this_month: number;
-  avg_mood_score?: number | null;
-  last_log_date?: string | null;
-  categories_used: number;
-  private_logs: number;
-  reviewed_logs: number;
-}
-
-export interface CategoryStats {
-  category_id: string;
-  category_name: string;
-  usage_count: number;
-  avg_mood_score?: number | null;
-  most_recent_use?: string | null;
+  child: {
+    id: string;
+    name: string;
+    avatar_url?: string | null;
+  };
+  category?: {
+    id: string;
+    name: string;
+    color: string;
+    icon: string;
+  } | null;
+  logged_by_profile: {
+    id: string;
+    full_name: string;
+    avatar_url?: string | null;
+  };
 }
 
 // ================================================================
@@ -382,29 +309,27 @@ export interface LogFilters {
 }
 
 export interface ChildFilters {
-  search_term?: string;
+  search?: string;
   relationship_type?: RelationshipType;
   is_active?: boolean;
   age_min?: number;
   age_max?: number;
   has_diagnosis?: boolean;
+  max_age?: number;
 }
 
 // ================================================================
-// FORM VALIDATION TYPES
+// DASHBOARD STATS TYPES
 // ================================================================
 
-export interface ValidationError {
-  field: string;
-  message: string;
-}
-
-export interface FormState<T> {
-  data: T;
-  errors: ValidationError[];
-  isValid: boolean;
-  isDirty: boolean;
-  isSubmitting: boolean;
+export interface DashboardStats {
+  total_children: number;
+  total_logs: number;
+  logs_this_week: number;
+  logs_this_month: number;
+  active_categories: number;
+  pending_reviews: number;
+  follow_ups_due: number;
 }
 
 // ================================================================
@@ -441,6 +366,23 @@ export interface ExportOptions {
   child_ids: string[];
   category_ids: string[];
   fields: string[];
+}
+
+// ================================================================
+// FORM VALIDATION TYPES
+// ================================================================
+
+export interface ValidationError {
+  field: string;
+  message: string;
+}
+
+export interface FormState<T> {
+  data: T;
+  errors: ValidationError[];
+  isValid: boolean;
+  isDirty: boolean;
+  isSubmitting: boolean;
 }
 
 // ================================================================
