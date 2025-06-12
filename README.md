@@ -1,36 +1,120 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# NeuroLog - Registro Diario para Niños con NEE
 
-## Getting Started
+## 📋 Descripción
 
-First, run the development server:
+NeuroLog es una aplicación web **open source** orientada al registro y seguimiento diario de comportamientos, emociones y avances de niños con necesidades educativas especiales (NEE). 
 
+La aplicación facilita la colaboración entre padres, docentes y profesionales clínicos, centralizando la información de forma estructurada, segura y accesible mediante un sistema de roles diferenciados.
+
+### ✨ Características principales:
+- Registro diario de eventos categorizados (emociones, conductas, alimentación, atención, socialización)
+- Visualización de patrones y tendencias con gráficos
+- Sistema de roles para padres, docentes y especialistas
+- Exportación de reportes en CSV/PDF
+- Notificaciones y recordatorios automáticos
+- Seguridad y privacidad de datos
+
+## 🛠 Tecnologías
+
+- **Frontend:** Next.js/React
+- **Backend:** Supabase (PostgreSQL + Edge Functions)
+- **Autenticación:** Supabase Auth
+- **Tiempo real:** Supabase Realtime
+- **Gráficos:** Chart.js/Recharts
+
+## 📋 Requisitos del Sistema
+
+- **Node.js:** v18.0.0 o superior
+- **npm:** v8.0.0 o superior
+- **Cuenta Supabase:** Gratuita
+
+## 🚀 Instalación
+
+### 1. Clonar el repositorio
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone https://github.com/israelgo93/neurolog-app.git
+cd neurolog-app
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Instalar dependencias
+```bash
+npm install
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 3. Configurar Supabase
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+#### Crear proyecto en Supabase:
+1. Ve a [supabase.com](https://supabase.com) y crea una cuenta gratuita
+2. Crea un nuevo proyecto
+3. Anota la **URL** y **anon key** de tu proyecto (Settings > API)
 
-## Learn More
+#### Configurar base de datos:
+1. Ve a SQL Editor en tu dashboard de Supabase
+2. Ejecuta el script ubicado en `scripts/basedatos.sql`
+3. Verifica que las tablas se hayan creado correctamente
 
-To learn more about Next.js, take a look at the following resources:
+### 4. Variables de entorno
+Crea un archivo `.env.local` en la raíz del proyecto:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```env
+NEXT_PUBLIC_SUPABASE_URL=tu-url-de-supabase
+NEXT_PUBLIC_SUPABASE_ANON_KEY=tu-anon-key-de-supabase
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### 5. Ejecutar la aplicación
+```bash
+npm run dev
+```
 
-## Deploy on Vercel
+La aplicación estará disponible en `http://localhost:3000`
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 📊 Configuración de Supabase
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Habilitar Row Level Security (RLS):
+1. Ve a Authentication > Policies en tu dashboard
+2. Habilita RLS para las tablas principales
+3. Las políticas de seguridad se configuran automáticamente con el script SQL
+
+### Configurar autenticación:
+1. Ve a Authentication > Settings
+2. Configura los providers de autenticación deseados (Email, Google, etc.)
+3. Ajusta las URLs de redirección según tu dominio
+
+## 🔑 Estructura del Proyecto
+
+```
+neurolog-app/
+├── scripts/
+│   └── basedatos.sql      # Script de creación de BD
+├── src/
+│   ├── components/        # Componentes React
+│   ├── pages/            # Páginas Next.js
+│   ├── lib/              # Configuración Supabase
+│   └── styles/           # Estilos CSS
+├── .env.local            # Variables de entorno
+└── README.md
+```
+
+## 🤝 Contribuir
+
+NeuroLog es un proyecto open source. Las contribuciones son bienvenidas:
+
+1. Fork el repositorio
+2. Crea una rama para tu feature (`git checkout -b feature/nueva-funcionalidad`)
+3. Commit tus cambios (`git commit -am 'Agregar nueva funcionalidad'`)
+4. Push a la rama (`git push origin feature/nueva-funcionalidad`)
+5. Crea un Pull Request
+
+## 📝 Licencia
+
+Este proyecto está bajo licencia MIT. Ver el archivo `LICENSE` para más detalles.
+
+## 🆘 Soporte
+
+Si encuentras algún problema o tienes preguntas:
+- Abre un [issue](https://github.com/israelgo93/neurolog-app/issues) en GitHub
+- Revisa la documentación en la carpeta `docs/`
+
+---
+
+**Nota:** NeuroLog está diseñado para complementar, no reemplazar, la evaluación profesional especializada.
