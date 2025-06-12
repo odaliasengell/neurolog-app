@@ -14,8 +14,12 @@ export const metadata: Metadata = {
   title: 'NeuroLog - Seguimiento NEE',
   description: 'Sistema de registro diario para niños con necesidades educativas especiales',
   keywords: ['neurolog', 'NEE', 'educación especial', 'seguimiento', 'registro diario'],
-  authors: [{ name: 'NeuroLog Team' }],
-  viewport: 'width=device-width, initial-scale=1',
+  authors: [{ name: 'NeuroLog Team' }]
+}
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
 }
 
 // ✅ COMPONENTE DE FALLBACK ESPECÍFICO PARA EL LAYOUT

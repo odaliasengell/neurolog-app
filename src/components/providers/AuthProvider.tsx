@@ -55,11 +55,11 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
   
-  // ✅ USAR useRef PARA MANTENER REFERENCIAS ESTABLES
+  //  USAR useRef PARA MANTENER REFERENCIAS ESTABLES
   const supabaseRef = useRef(createClient());
   const supabase = supabaseRef.current;
   
-  // ✅ REF PARA CONTROLAR INICIALIZACIÓN Y MONTAJE
+  //  REF PARA CONTROLAR INICIALIZACIÓN Y MONTAJE
   const initializedRef = useRef(false);
   const mountedRef = useRef(true);
   const authSubscriptionRef = useRef<any>(null);
@@ -69,62 +69,59 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
   // ================================================================
 
   /**
-   * ✅ FETCH PROFILE - MEJORADO CON MEJOR MANEJO DE ERRORES
+   *  FETCH PROFILE - MEJORADO CON MEJOR MANEJO DE ERRORES
    */
   const fetchProfile = useCallback(async (userId: string): Promise<Profile | null> => {
     try {
       console.log('🔍 Fetching profile for user:', userId);
       
+      //  CAMBIO: .maybeSingle() en lugar de .single()
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
-        .single();
+        .maybeSingle(); // ← ESTO ELIMINA EL ERROR 406
 
       if (error) {
         console.error('❌ Error fetching profile:', error);
-        
-        // ✅ Si no existe el perfil, intentar crearlo automáticamente
-        if (error.code === 'PGRST116') { // No rows found
-          console.log('ℹ️ Profile not found, creating new profile...');
-          
-          const { data: authUser, error: authError } = await supabase.auth.getUser();
-          
-          if (authUser?.user && !authError) {
-            const userData = authUser.user;
-            const fullName = userData.user_metadata?.full_name || 
-                            userData.user_metadata?.name ||
-                            userData.email?.split('@')[0] || 
-                            'Usuario';
-            
-            const { data: newProfile, error: createError } = await supabase
-              .from('profiles')
-              .insert({
-                id: userId,
-                email: userData.email || '',
-                full_name: fullName,
-                role: userData.user_metadata?.role || 'parent',
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-              })
-              .select()
-              .single();
-            
-            if (createError) {
-              console.error('❌ Error creating profile:', createError);
-              return null;
-            }
-            
-            console.log('✅ Profile created successfully:', newProfile.full_name);
-            return newProfile as Profile;
-          }
-        }
-        
         return null;
       }
 
+      //  Si no existe el perfil, crearlo automáticamente
       if (!data) {
-        console.warn('⚠️ No profile data returned for user:', userId);
+        console.log('ℹ️ Profile not found, creating new profile...');
+        
+        const { data: authUser, error: authError } = await supabase.auth.getUser();
+        
+        if (authUser?.user && !authError) {
+          const userData = authUser.user;
+          const fullName = userData.user_metadata?.full_name || 
+                          userData.user_metadata?.name ||
+                          userData.email?.split('@')[0] || 
+                          'Usuario';
+          
+          const { data: newProfile, error: createError } = await supabase
+            .from('profiles')
+            .insert({
+              id: userId,
+              email: userData.email || '',
+              full_name: fullName,
+              role: userData.user_metadata?.role || 'parent',
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            })
+            .select()
+            .single();
+          
+          if (createError) {
+            console.error('❌ Error creating profile:', createError);
+            return null;
+          }
+          
+          console.log('✅ Profile created successfully:', newProfile.full_name);
+          return newProfile as Profile;
+        }
+        
         return null;
       }
 
@@ -137,18 +134,24 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
   }, [supabase]);
 
   /**
-   * ✅ CHECK ADMIN STATUS - ESTABILIZADA
+   *  CHECK ADMIN STATUS - ESTABILIZADA
    */
   const checkAdminStatus = useCallback(async (userId: string): Promise<boolean> => {
     try {
+      //  CAMBIO: .maybeSingle() aquí también
       const { data, error } = await supabase
         .from('profiles')
         .select('role')
         .eq('id', userId)
-        .single();
+        .maybeSingle(); // ← ESTO TAMBIÉN PREVIENE ERRORES
 
-      if (error || !data) {
+      if (error) {
         console.warn('⚠️ Could not check admin status:', error);
+        return false;
+      }
+
+      if (!data) {
+        console.warn('⚠️ No profile found for admin check');
         return false;
       }
 
@@ -160,7 +163,7 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
   }, [supabase]);
 
   /**
-   * ✅ UPDATE LAST LOGIN - ESTABILIZADA
+   *  UPDATE LAST LOGIN - ESTABILIZADA
    */
   const updateLastLogin = useCallback(async (userId: string): Promise<void> => {
     try {
@@ -237,7 +240,7 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
 
-      // ✅ LIMPIAR ESTADO INMEDIATAMENTE
+      //  LIMPIAR ESTADO INMEDIATAMENTE
       setUser(null);
       setIsAdmin(false);
       setError(null);
@@ -264,7 +267,7 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
 
       if (error) throw error;
 
-      // ✅ ACTUALIZAR ESTADO LOCAL INMEDIATAMENTE
+      //  ACTUALIZAR ESTADO LOCAL INMEDIATAMENTE
       setUser(prev => prev ? { ...prev, ...updates } : null);
     } catch (err: any) {
       console.error('❌ Update profile error:', err);
@@ -315,7 +318,7 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
   // ================================================================
 
   useEffect(() => {
-    // ✅ PREVENIR MÚLTIPLES INICIALIZACIONES
+    //  PREVENIR MÚLTIPLES INICIALIZACIONES
     if (initializedRef.current) return;
     
     initializedRef.current = true;
@@ -324,7 +327,7 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
     console.log('🚀 Initializing AuthProvider (ONE TIME ONLY)...');
 
     /**
-     * ✅ FUNCIÓN DE INICIALIZACIÓN ÚNICA
+     *  FUNCIÓN DE INICIALIZACIÓN ÚNICA
      */
     const initializeAuth = async (): Promise<void> => {
       try {
@@ -363,7 +366,7 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
     };
 
     /**
-     * ✅ LISTENER DE AUTH MEJORADO - UNA SOLA SUBSCRIPCIÓN
+     *  LISTENER DE AUTH MEJORADO - UNA SOLA SUBSCRIPCIÓN
      */
     const setupAuthListener = () => {
       const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -417,11 +420,11 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
       return subscription;
     };
 
-    // ✅ INICIALIZAR TODO
+    //  INICIALIZAR TODO
     initializeAuth();
     setupAuthListener();
 
-    // ✅ CLEANUP FUNCTION
+    //  CLEANUP FUNCTION
     return () => {
       console.log('🧹 Cleaning up AuthProvider...');
       mountedRef.current = false;
@@ -431,7 +434,7 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
         authSubscriptionRef.current = null;
       }
     };
-  }, []); // ✅ DEPENDENCIAS VACÍAS - SOLO EJECUTAR UNA VEZ
+  }, []); //  DEPENDENCIAS VACÍAS - SOLO EJECUTAR UNA VEZ
 
   // ================================================================
   // CLEANUP ON UNMOUNT

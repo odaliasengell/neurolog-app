@@ -116,10 +116,11 @@ export function useLogs(options: UseLogsOptions = {}): UseLogsReturn {
     if (!userId) return [];
     
     try {
+      // ✅ CORRECCIÓN: Quitar el filtro .eq('user_id', userId) 
+      // porque la vista user_accessible_children ya filtra automáticamente por auth.uid()
       const { data, error } = await supabase
         .from('user_accessible_children')
-        .select('id')
-        .eq('user_id', userId);
+        .select('id');  // ← Sin filtro adicional
       
       if (error) throw error;
       return data?.map(child => child.id) || [];
