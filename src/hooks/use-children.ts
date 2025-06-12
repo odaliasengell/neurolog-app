@@ -67,97 +67,71 @@ export function useChildren(options: UseChildrenOptions = {}): UseChildrenReturn
    * Obtener niños accesibles para el usuario usando JOINs directos
    */
   const fetchChildren = useCallback(async (): Promise<void> => {
-    if (!user) {
-      setChildren([]);
-      setLoading(false);
-      return;
+  if (!user) {
+    setChildren([]);
+    setLoading(false);
+    return;
+  }
+
+  try {
+    setLoading(true);
+    setError(null);
+
+    console.log('👶 Fetching children for user:', user.id);
+
+    // ✅ SOLUCIÓN: Usar la vista user_accessible_children que ya maneja toda la lógica
+    let query = supabase
+      .from('user_accessible_children')  // Vista en lugar de tabla + JOIN
+      .select('*')
+      .eq('user_id', user.id);  // La vista ya incluye user_id
+
+    // Filtrar por estado activo si se requiere
+    if (!includeInactive) {
+      query = query.eq('is_active', true);
     }
 
-    try {
-      setLoading(true);
-      setError(null);
+    const { data, error } = await query.order('created_at', { ascending: false });
 
-      console.log('👶 Fetching children for user:', user.id);
-
-      // Usar JOIN directo en lugar de vista
-      let query = supabase
-        .from('children')
-        .select(`
-          id,
-          name,
-          birth_date,
-          diagnosis,
-          notes,
-          is_active,
-          avatar_url,
-          emergency_contact,
-          medical_info,
-          educational_info,
-          privacy_settings,
-          created_by,
-          created_at,
-          updated_at,
-          user_child_relations!inner(
-            relationship_type,
-            can_view,
-            can_edit,
-            can_export,
-            can_invite_others,
-            is_active
-          )
-        `)
-        .eq('user_child_relations.user_id', user.id)
-        .eq('user_child_relations.is_active', true);
-
-      // Filtrar por estado activo si se requiere
-      if (!includeInactive) {
-        query = query.eq('is_active', true);
-      }
-
-      // Filtrar relaciones no expiradas
-      query = query.or('user_child_relations.expires_at.is.null,user_child_relations.expires_at.gt.' + new Date().toISOString());
-
-      const { data, error: fetchError } = await query.order('name');
-
-      if (fetchError) {
-        console.error('❌ Error fetching children:', fetchError);
-        throw fetchError;
-      }
-
-      console.log('✅ Children fetched successfully:', data?.length || 0);
-
-      // Transformar datos para que coincidan con la interfaz esperada
-      const transformedData = data?.map(child => ({
-        ...child,
-        // Extraer datos de la relación del primer elemento (siempre habrá solo uno por el JOIN)
-        relationship_type: child.user_child_relations[0]?.relationship_type,
-        can_view: child.user_child_relations[0]?.can_view,
-        can_edit: child.user_child_relations[0]?.can_edit,
-        can_export: child.user_child_relations[0]?.can_export,
-        can_invite_others: child.user_child_relations[0]?.can_invite_others,
-        // Remover el array de relaciones ya que no lo necesitamos en la interfaz
-        user_child_relations: undefined
-      })) || [];
-
-      setChildren(transformedData as ChildWithRelation[]);
-
-      // Registrar acceso para auditoría
-      if (transformedData && transformedData.length > 0) {
-        await auditSensitiveAccess(
-          'VIEW_CHILDREN_LIST',
-          user.id,
-          `Accessed ${transformedData.length} children`
-        );
-      }
-
-    } catch (err) {
-      console.error('❌ Error in fetchChildren:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Error al cargar los niños';
-      setError(errorMessage);
-    } finally {
-      setLoading(false);
+    if (error) {
+      console.error('❌ Error fetching children:', error);
+      throw error;
     }
-  }, [user, includeInactive, supabase]);
+
+    // Transformar datos para el tipo ChildWithRelation
+    const transformedChildren: ChildWithRelation[] = (data || []).map((child: any) => ({
+      id: child.id,
+      name: child.name,
+      birth_date: child.birth_date,
+      diagnosis: child.diagnosis,
+      notes: child.notes,
+      is_active: child.is_active,
+      avatar_url: child.avatar_url,
+      emergency_contact: child.emergency_contact,
+      medical_info: child.medical_info,
+      educational_info: child.educational_info,
+      privacy_settings: child.privacy_settings,
+      created_by: child.created_by,
+      created_at: child.created_at,
+      updated_at: child.updated_at,
+      // Campos de la relación
+      relationship_type: child.relationship_type,
+      can_view: child.can_view,
+      can_edit: child.can_edit,
+      can_export: child.can_export,
+      can_invite_others: child.can_invite_others,
+    }));
+
+    setChildren(transformedChildren);
+    console.log('✅ Children fetched successfully:', transformedChildren.length);
+
+  } catch (err) {
+    console.error('❌ Error in fetchChildren:', err);
+    const errorMessage = err instanceof Error ? err.message : 'Error al cargar los niños';
+    setError(errorMessage);
+  } finally {
+    setLoading(false);
+  }
+}, [user, includeInactive, supabase]);
 
   /**
    * Crear nuevo niño
