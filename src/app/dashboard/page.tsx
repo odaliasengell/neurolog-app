@@ -1,9 +1,9 @@
 // src/app/dashboard/page.tsx
-// Dashboard principal completamente responsivo y mejorado
+// Dashboard principal ACTUALIZADO con componentes corregidos y diseño responsivo
 
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -13,526 +13,536 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useChildren } from '@/hooks/use-children';
 import { useLogs } from '@/hooks/use-logs';
-import { useCategories } from '@/hooks/use-categories';
-import type { ChildWithRelation, LogWithDetails } from '@/types';
 import { 
   Users, 
   BookOpen, 
-  BarChart3, 
   TrendingUp, 
-  Calendar,
-  Clock,
-  AlertCircle,
-  CheckCircle,
-  Plus,
-  Eye,
-  ArrowRight,
-  Activity,
+  Calendar, 
   Heart,
+  AlertCircle,
+  Clock,
+  Eye,
+  Plus,
+  BarChart3,
+  Bell,
+  Activity,
   Target,
   Award,
-  Bell,
-  MessageSquare
+  ChevronRight,
+  MoreHorizontal
 } from 'lucide-react';
 import Link from 'next/link';
-import { format, isToday, isYesterday, formatDistanceToNow } from 'date-fns';
+import { format, isToday, isYesterday, startOfWeek, endOfWeek } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { cn } from '@/lib/utils';
 
 // ================================================================
-// COMPONENTES AUXILIARES
+// INTERFACES Y TIPOS
 // ================================================================
 
-interface StatCardProps {
-  title: string;
-  value: string | number;
-  change?: string;
-  changeType?: 'positive' | 'negative' | 'neutral';
-  icon: React.ComponentType<{ className?: string }>;
-  href?: string;
-  color?: string;
-  loading?: boolean;
+interface QuickStatsProps {
+  stats: any;
+  loading: boolean;
 }
 
-function StatCard({ title, value, change, changeType, icon: Icon, href, color = 'blue', loading }: StatCardProps) {
-  const colorClasses = {
-    blue: 'bg-blue-50 text-blue-700 border-blue-200',
-    green: 'bg-green-50 text-green-700 border-green-200',
-    purple: 'bg-purple-50 text-purple-700 border-purple-200',
-    orange: 'bg-orange-50 text-orange-700 border-orange-200',
-    red: 'bg-red-50 text-red-700 border-red-200'
-  };
+interface AccessibleChildrenProps {
+  children: any[];
+  loading: boolean;
+}
+
+interface RecentLogsProps {
+  logs: any[];
+  loading: boolean;
+}
+
+// ================================================================
+// COMPONENTE DE ESTADÍSTICAS RÁPIDAS RESPONSIVO
+// ================================================================
+
+function QuickStats({ stats, loading }: QuickStatsProps) {
+  const statCards = [
+    {
+      title: 'Niños',
+      value: stats.total_children || 0,
+      icon: Users,
+      color: 'text-blue-600',
+      bgColor: 'bg-blue-50',
+      borderColor: 'border-blue-200',
+      description: 'En seguimiento',
+      trend: stats.children_growth || 0
+    },
+    {
+      title: 'Registros',
+      value: stats.total_logs || 0,
+      icon: BookOpen,
+      color: 'text-green-600',
+      bgColor: 'bg-green-50',
+      borderColor: 'border-green-200',
+      description: 'Documentados',
+      trend: stats.logs_growth || 0
+    },
+    {
+      title: 'Esta Semana',
+      value: stats.logs_this_week || 0,
+      icon: TrendingUp,
+      color: 'text-purple-600',
+      bgColor: 'bg-purple-50',
+      borderColor: 'border-purple-200',
+      description: 'Nuevos registros',
+      trend: stats.weekly_growth || 0
+    },
+    {
+      title: 'Pendientes',
+      value: stats.pending_reviews || 0,
+      icon: AlertCircle,
+      color: 'text-orange-600',
+      bgColor: 'bg-orange-50',
+      borderColor: 'border-orange-200',
+      description: 'Para revisar',
+      trend: 0
+    }
+  ];
 
   if (loading) {
     return (
-      <Card className="card-responsive">
-        <CardContent className="p-4 sm:p-6">
-          <div className="flex items-center justify-between">
-            <div className="space-y-2 flex-1">
-              <Skeleton className="h-4 w-2/3" />
-              <Skeleton className="h-6 w-1/3" />
-            </div>
-            <Skeleton className="h-10 w-10 rounded-lg" />
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  const content = (
-    <CardContent className="p-4 sm:p-6">
-      <div className="flex items-center justify-between">
-        <div className="space-y-1 sm:space-y-2">
-          <p className="text-xs sm:text-sm font-medium text-muted-foreground">{title}</p>
-          <div className="flex items-baseline space-x-2">
-            <p className="text-xl sm:text-2xl lg:text-3xl font-bold">{value}</p>
-            {change && (
-              <span className={cn(
-                "text-xs sm:text-sm font-medium",
-                changeType === 'positive' && "text-green-600",
-                changeType === 'negative' && "text-red-600",
-                changeType === 'neutral' && "text-gray-600"
-              )}>
-                {change}
-              </span>
-            )}
-          </div>
-        </div>
-        <div className={cn(
-          "p-2 sm:p-3 rounded-lg border",
-          colorClasses[color as keyof typeof colorClasses]
-        )}>
-          <Icon className="h-4 w-4 sm:h-5 sm:w-5 lg:h-6 lg:w-6" />
-        </div>
+      <div className="grid gap-3 sm:gap-4 md:gap-6 grid-cols-2 lg:grid-cols-4">
+        {[...Array(4)].map((_, i) => (
+          <Card key={i} className="animate-pulse">
+            <CardContent className="p-3 sm:p-4 md:p-6">
+              <div className="flex items-center justify-between space-x-2">
+                <div className="space-y-2 flex-1">
+                  <Skeleton className="h-3 sm:h-4 w-16 sm:w-20" />
+                  <Skeleton className="h-6 sm:h-8 w-12 sm:w-16" />
+                  <Skeleton className="h-2 sm:h-3 w-14 sm:w-18" />
+                </div>
+                <Skeleton className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg" />
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
-    </CardContent>
-  );
-
-  if (href) {
-    return (
-      <Card className="card-responsive hover:shadow-lg transition-all cursor-pointer group">
-        <Link href={href}>
-          {content}
-        </Link>
-      </Card>
     );
   }
 
   return (
-    <Card className="card-responsive">
-      {content}
-    </Card>
+    <div className="grid gap-3 sm:gap-4 md:gap-6 grid-cols-2 lg:grid-cols-4">
+      {statCards.map((stat, index) => (
+        <Card key={index} className={`hover:shadow-md transition-all duration-200 ${stat.borderColor} border-l-4`}>
+          <CardContent className="p-3 sm:p-4 md:p-6">
+            <div className="flex items-center justify-between space-x-2">
+              <div className="space-y-1 sm:space-y-2 flex-1 min-w-0">
+                <p className="text-xs sm:text-sm font-medium text-gray-600 truncate">
+                  {stat.title}
+                </p>
+                <p className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900">
+                  {stat.value.toLocaleString()}
+                </p>
+                <p className="text-xs text-gray-500 truncate">
+                  {stat.description}
+                </p>
+                {stat.trend !== 0 && (
+                  <div className={`text-xs flex items-center ${stat.trend > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    <TrendingUp className={`h-3 w-3 mr-1 ${stat.trend < 0 ? 'rotate-180' : ''}`} />
+                    <span>{Math.abs(stat.trend)}%</span>
+                  </div>
+                )}
+              </div>
+              <div className={`p-2 sm:p-3 rounded-lg ${stat.bgColor} flex-shrink-0`}>
+                <stat.icon className={`h-4 w-4 sm:h-5 sm:w-5 ${stat.color}`} />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
   );
 }
 
-interface QuickActionProps {
-  title: string;
-  description: string;
-  icon: React.ComponentType<{ className?: string }>;
-  href: string;
-  color?: string;
-}
+// ================================================================
+// COMPONENTE DE NIÑOS ACCESIBLES RESPONSIVO
+// ================================================================
 
-function QuickAction({ title, description, icon: Icon, href, color = 'blue' }: QuickActionProps) {
-  const colorClasses = {
-    blue: 'hover:bg-blue-50 group-hover:text-blue-700',
-    green: 'hover:bg-green-50 group-hover:text-green-700',
-    purple: 'hover:bg-purple-50 group-hover:text-purple-700',
-    orange: 'hover:bg-orange-50 group-hover:text-orange-700'
-  };
+function AccessibleChildren({ children, loading }: AccessibleChildrenProps) {
+  if (loading) {
+    return (
+      <div className="grid gap-3 sm:gap-4 md:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+        {[...Array(3)].map((_, i) => (
+          <Card key={i} className="animate-pulse">
+            <CardContent className="p-4 sm:p-6">
+              <div className="flex items-center space-x-3 sm:space-x-4">
+                <Skeleton className="h-12 w-12 sm:h-16 sm:w-16 rounded-full" />
+                <div className="space-y-2 flex-1">
+                  <Skeleton className="h-4 w-24 sm:w-32" />
+                  <Skeleton className="h-3 w-16 sm:w-20" />
+                  <Skeleton className="h-3 w-20 sm:w-24" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    );
+  }
 
-  return (
-    <Link href={href} className="group">
-      <Card className="card-responsive hover:shadow-lg transition-all cursor-pointer h-full">
-        <CardContent className="p-4 sm:p-6 h-full flex flex-col">
-          <div className="flex items-start space-x-3 sm:space-x-4 flex-1">
-            <div className={cn(
-              "p-2 sm:p-3 rounded-lg transition-colors",
-              colorClasses[color as keyof typeof colorClasses]
-            )}>
-              <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <h3 className="text-sm sm:text-base font-medium text-gray-900 group-hover:text-gray-800 transition-colors">
-                {title}
-              </h3>
-              <p className="text-xs sm:text-sm text-gray-600 mt-1 line-clamp-2">
-                {description}
-              </p>
-            </div>
-            <ArrowRight className="h-4 w-4 text-gray-400 group-hover:text-gray-600 transition-colors flex-shrink-0" />
-          </div>
-        </CardContent>
-      </Card>
-    </Link>
-  );
-}
-
-interface RecentActivityItemProps {
-  log: LogWithDetails;
-}
-
-function RecentActivityItem({ log }: RecentActivityItemProps) {
-  const timeFormatted = useMemo(() => {
-    const date = new Date(log.created_at);
-    if (isToday(date)) {
-      return `Hoy ${format(date, 'HH:mm')}`;
-    } else if (isYesterday(date)) {
-      return `Ayer ${format(date, 'HH:mm')}`;
-    } else {
-      return formatDistanceToNow(date, { addSuffix: true, locale: es });
-    }
-  }, [log.created_at]);
-
-  const getMoodEmoji = (score: number) => {
-    if (score >= 8) return '😊';
-    if (score >= 6) return '🙂';
-    if (score >= 4) return '😐';
-    if (score >= 2) return '😞';
-    return '😢';
-  };
-
-  return (
-    <div className="flex items-start space-x-3 p-3 sm:p-4 rounded-lg hover:bg-gray-50 transition-colors">
-      <Avatar className="h-8 w-8 sm:h-10 sm:w-10 flex-shrink-0">
-        <AvatarImage src={log.child?.avatar_url} />
-        <AvatarFallback className="text-xs sm:text-sm">
-          {log.child?.name?.charAt(0) || 'N'}
-        </AvatarFallback>
-      </Avatar>
-      
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between mb-1">
-          <p className="text-sm sm:text-base font-medium text-gray-900 truncate">
-            {log.child?.name || 'Niño desconocido'}
-          </p>
-          <span className="text-xs text-gray-500 flex-shrink-0 ml-2">
-            {timeFormatted}
-          </span>
+  if (children.length === 0) {
+    return (
+      <div className="text-center py-8 sm:py-12">
+        <div className="mx-auto w-16 h-16 sm:w-20 sm:h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+          <Users className="h-8 w-8 sm:h-10 sm:w-10 text-gray-400" />
         </div>
-        
-        <p className="text-xs sm:text-sm text-gray-600 line-clamp-2 mb-2">
-          {log.title}
+        <h3 className="text-lg sm:text-xl font-medium text-gray-900 mb-2">
+          No hay niños registrados
+        </h3>
+        <p className="text-sm sm:text-base text-gray-500 mb-6 max-w-sm mx-auto">
+          Comienza agregando el primer niño para comenzar el seguimiento
         </p>
-        
-        <div className="flex items-center space-x-2">
-          {log.category && (
-            <Badge 
-              variant="secondary" 
-              className="text-xs"
-              style={{ backgroundColor: `${log.category.color}20`, color: log.category.color }}
-            >
-              {log.category.name}
-            </Badge>
-          )}
-          
-          {log.mood_score && (
-            <span className="text-sm">
-              {getMoodEmoji(log.mood_score)}
-            </span>
-          )}
-          
-          {log.needs_review && (
-            <Badge variant="destructive" className="text-xs">
-              Requiere revisión
-            </Badge>
-          )}
+        <Button asChild size="lg">
+          <Link href="/dashboard/children/new">
+            <Plus className="mr-2 h-4 w-4" />
+            Agregar Primer Niño
+          </Link>
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4 sm:space-y-6">
+      <div className="grid gap-3 sm:gap-4 md:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+        {children.slice(0, 6).map((child) => (
+          <Card key={child.id} className="hover:shadow-md transition-all duration-200 group">
+            <CardContent className="p-4 sm:p-6">
+              <div className="flex items-center space-x-3 sm:space-x-4">
+                <Avatar className="h-12 w-12 sm:h-16 sm:w-16 border-2 border-gray-100">
+                  <AvatarImage 
+                    src={child.avatar_url} 
+                    alt={child.name}
+                  />
+                  <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white font-semibold">
+                    {child.name.charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
+                    {child.name}
+                  </h4>
+                  
+                  <div className="flex items-center space-x-2 mt-1">
+                    <Badge variant={child.can_edit ? "default" : "secondary"} className="text-xs">
+                      {child.can_edit ? "Editor" : "Lectura"}
+                    </Badge>
+                    <span className="text-xs text-gray-500">
+                      {child.relationship_type}
+                    </span>
+                  </div>
+                  
+                  {child.last_log_date && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Último registro: {format(new Date(child.last_log_date), 'dd MMM', { locale: es })}
+                    </p>
+                  )}
+                </div>
+                
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Button variant="ghost" size="sm" asChild>
+                    <Link href={`/dashboard/children/${child.id}`}>
+                      <ChevronRight className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                </div>
+              </div>
+              
+              {/* Progress bar de actividad */}
+              <div className="mt-4 space-y-2">
+                <div className="flex justify-between text-xs text-gray-500">
+                  <span>Actividad semanal</span>
+                  <span>{child.weekly_logs || 0}/7</span>
+                </div>
+                <Progress 
+                  value={((child.weekly_logs || 0) / 7) * 100} 
+                  className="h-2"
+                  indicatorClassName={
+                    (child.weekly_logs || 0) >= 5 ? "bg-green-500" :
+                    (child.weekly_logs || 0) >= 3 ? "bg-yellow-500" : "bg-red-500"
+                  }
+                />
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+      
+      {children.length > 6 && (
+        <div className="text-center pt-4">
+          <Button variant="outline" asChild>
+            <Link href="/dashboard/children">
+              Ver todos los niños ({children.length})
+              <ChevronRight className="ml-2 h-4 w-4" />
+            </Link>
+          </Button>
         </div>
+      )}
+    </div>
+  );
+}
+
+// ================================================================
+// COMPONENTE DE REGISTROS RECIENTES RESPONSIVO
+// ================================================================
+
+function RecentLogs({ logs, loading }: RecentLogsProps) {
+  if (loading) {
+    return (
+      <div className="space-y-3 sm:space-y-4">
+        {[...Array(3)].map((_, i) => (
+          <div key={i} className="flex items-center space-x-3 sm:space-x-4 p-3 sm:p-4 rounded-lg border bg-white animate-pulse">
+            <Skeleton className="h-10 w-10 rounded-full" />
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-3 w-1/2" />
+            </div>
+            <Skeleton className="h-6 w-12" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (logs.length === 0) {
+    return (
+      <div className="text-center py-8 sm:py-12">
+        <div className="mx-auto w-16 h-16 sm:w-20 sm:h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+          <BookOpen className="h-8 w-8 sm:h-10 sm:w-10 text-gray-400" />
+        </div>
+        <h3 className="text-lg sm:text-xl font-medium text-gray-900 mb-2">
+          No hay registros recientes
+        </h3>
+        <p className="text-sm sm:text-base text-gray-500 mb-6 max-w-sm mx-auto">
+          Comienza creando tu primer registro diario
+        </p>
+        <Button asChild size="lg">
+          <Link href="/dashboard/logs/new">
+            <Plus className="mr-2 h-4 w-4" />
+            Crear Registro
+          </Link>
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3 sm:space-y-4">
+      {logs.slice(0, 5).map((log) => (
+        <div key={log.id} className="flex items-start space-x-3 sm:space-x-4 p-3 sm:p-4 rounded-lg border bg-white hover:bg-gray-50 transition-colors group">
+          <Avatar className="h-10 w-10 flex-shrink-0">
+            <AvatarImage 
+              src={log.child_avatar_url} 
+              alt={log.child_name}
+            />
+            <AvatarFallback className="bg-blue-100 text-blue-600 text-sm">
+              {log.child_name.charAt(0).toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+          
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between">
+              <h4 className="text-sm font-medium text-gray-900 truncate pr-2">
+                {log.title}
+              </h4>
+              <div className="flex items-center space-x-2 flex-shrink-0">
+                {log.mood_score && (
+                  <div className="flex items-center">
+                    <Heart className="h-3 w-3 text-red-400 mr-1" />
+                    <span className="text-xs text-gray-500">{log.mood_score}/5</span>
+                  </div>
+                )}
+                <Badge variant="outline" className="text-xs">
+                  {log.category_name || 'General'}
+                </Badge>
+              </div>
+            </div>
+            
+            <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+              {log.content}
+            </p>
+            
+            <div className="flex items-center justify-between mt-2">
+              <div className="text-xs text-gray-500">
+                <span className="font-medium">{log.child_name}</span>
+                <span className="mx-1">•</span>
+                <span>
+                  {isToday(new Date(log.created_at)) ? 'Hoy' :
+                   isYesterday(new Date(log.created_at)) ? 'Ayer' :
+                   format(new Date(log.created_at), 'dd MMM', { locale: es })}
+                </span>
+              </div>
+              
+              <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                <Button variant="ghost" size="sm" asChild>
+                  <Link href={`/dashboard/logs/${log.id}`}>
+                    <Eye className="h-3 w-3" />
+                  </Link>
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ))}
+      
+      <div className="text-center pt-4">
+        <Button variant="outline" asChild>
+          <Link href="/dashboard/logs">
+            Ver todos los registros
+            <ChevronRight className="ml-2 h-4 w-4" />
+          </Link>
+        </Button>
       </div>
     </div>
   );
 }
 
 // ================================================================
-// COMPONENTE PRINCIPAL
+// COMPONENTE PRINCIPAL DEL DASHBOARD
 // ================================================================
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const { children, loading: childrenLoading } = useChildren();
-  const { logs, stats, loading: logsLoading } = useLogs({ pageSize: 5 });
-  const { categories, loading: categoriesLoading } = useCategories();
+  const { children, loading: childrenLoading, stats: childrenStats } = useChildren();
+  const { logs, loading: logsLoading, stats } = useLogs();
 
-  const [selectedPeriod, setSelectedPeriod] = useState('week');
-
-  // Stats calculadas
-  const calculatedStats = useMemo(() => {
-    const totalProgress = children.length > 0 ? 
-      (stats.logs_this_month / (children.length * 30)) * 100 : 0;
-    
-    const activeChildren = children.filter(child => child.is_active).length;
-    const pendingTasks = stats.pending_reviews + stats.follow_ups_due;
-    
-    return {
-      totalProgress: Math.min(totalProgress, 100),
-      activeChildren,
-      pendingTasks
-    };
-  }, [children, stats]);
-
-  // Logs recientes para la actividad
-  const recentLogs = useMemo(() => {
-    return logs.slice(0, 5);
-  }, [logs]);
-
-  // Determinar saludo según la hora
-  const greeting = useMemo(() => {
+  const greeting = () => {
     const hour = new Date().getHours();
     if (hour < 12) return 'Buenos días';
     if (hour < 18) return 'Buenas tardes';
     return 'Buenas noches';
-  }, []);
-
-  const isLoading = childrenLoading || logsLoading || categoriesLoading;
+  };
 
   return (
-    <div className="space-y-4 sm:space-y-6 lg:space-y-8">
-      {/* Header */}
-      <div className="space-y-2 sm:space-y-4">
-        <div className="flex flex-col space-y-2 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
-          <div>
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900">
-              {greeting}, {user?.full_name?.split(' ')[0] || 'Usuario'}
-            </h1>
-            <p className="text-sm sm:text-base text-gray-600 mt-1">
-              Aquí tienes un resumen de la actividad reciente
-            </p>
-          </div>
-          
-          <div className="flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:space-x-2">
-            <Button size="sm" className="w-full sm:w-auto" asChild>
-              <Link href="/dashboard/logs?action=new">
-                <Plus className="h-4 w-4 mr-2" />
-                Nuevo Registro
-              </Link>
-            </Button>
-            <Button variant="outline" size="sm" className="w-full sm:w-auto" asChild>
-              <Link href="/dashboard/reports">
-                <BarChart3 className="h-4 w-4 mr-2" />
-                Ver Reportes
-              </Link>
-            </Button>
-          </div>
+    <div className="space-y-6 sm:space-y-8">
+      {/* Header responsivo */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
+        <div className="space-y-1">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+            {greeting()}, {user?.user_metadata?.full_name?.split(' ')[0] || 'Usuario'}
+          </h1>
+          <p className="text-sm sm:text-base text-gray-600">
+            Aquí está el resumen de hoy para tus niños en seguimiento
+          </p>
+        </div>
+        
+        <div className="flex items-center space-x-2 sm:space-x-3">
+          <Button variant="outline" size="sm" asChild className="hidden sm:flex">
+            <Link href="/dashboard/reports">
+              <BarChart3 className="mr-2 h-4 w-4" />
+              Reportes
+            </Link>
+          </Button>
+          <Button size="sm" asChild>
+            <Link href="/dashboard/logs/new">
+              <Plus className="mr-2 h-4 w-4" />
+              <span className="hidden sm:inline">Nuevo Registro</span>
+              <span className="sm:hidden">Registro</span>
+            </Link>
+          </Button>
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
-        <StatCard
-          title="Niños Activos"
-          value={calculatedStats.activeChildren}
-          change="+2 este mes"
-          changeType="positive"
-          icon={Users}
-          href="/dashboard/children"
-          color="blue"
-          loading={isLoading}
-        />
-        
-        <StatCard
-          title="Registros Totales"
-          value={stats.total_logs}
-          change={`+${stats.logs_this_week} esta semana`}
-          changeType="positive"
-          icon={BookOpen}
-          href="/dashboard/logs"
-          color="green"
-          loading={isLoading}
-        />
-        
-        <StatCard
-          title="Progreso Mensual"
-          value={`${Math.round(calculatedStats.totalProgress)}%`}
-          change="↗ Mejorando"
-          changeType="positive"
-          icon={TrendingUp}
-          href="/dashboard/reports"
-          color="purple"
-          loading={isLoading}
-        />
-        
-        <StatCard
-          title="Tareas Pendientes"
-          value={calculatedStats.pendingTasks}
-          change={calculatedStats.pendingTasks > 0 ? "Requiere atención" : "Al día"}
-          changeType={calculatedStats.pendingTasks > 0 ? "negative" : "positive"}
-          icon={calculatedStats.pendingTasks > 0 ? AlertCircle : CheckCircle}
-          color={calculatedStats.pendingTasks > 0 ? "red" : "green"}
-          loading={isLoading}
-        />
-      </div>
+      {/* Estadísticas rápidas */}
+      <QuickStats stats={stats} loading={logsLoading} />
 
-      {/* Quick Actions */}
-      <div className="space-y-3 sm:space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Acciones Rápidas</h2>
-        </div>
-        
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6">
-          <QuickAction
-            title="Agregar Niño"
-            description="Registra un nuevo niño en el sistema de seguimiento"
-            icon={Users}
-            href="/dashboard/children?action=new"
-            color="blue"
-          />
-          
-          <QuickAction
-            title="Nuevo Registro"
-            description="Crear un nuevo registro diario de observaciones"
-            icon={Plus}
-            href="/dashboard/logs?action=new"
-            color="green"
-          />
-          
-          <QuickAction
-            title="Ver Calendario"
-            description="Gestiona citas y programar seguimientos"
-            icon={Calendar}
-            href="/dashboard/calendar"
-            color="purple"
-          />
-        </div>
-      </div>
-
-      {/* Recent Activity & Overview */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
-        
-        {/* Recent Activity */}
-        <div className="lg:col-span-2">
-          <Card className="card-responsive h-full">
-            <CardHeader className="pb-3 sm:pb-4">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base sm:text-lg">Actividad Reciente</CardTitle>
-                <Button variant="ghost" size="sm" asChild>
-                  <Link href="/dashboard/logs">
-                    <Eye className="h-4 w-4 mr-2" />
-                    Ver todos
+      {/* Grid principal responsivo */}
+      <div className="grid gap-6 lg:gap-8 lg:grid-cols-3">
+        {/* Columna principal */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Niños accesibles */}
+          <Card>
+            <CardHeader className="pb-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
+                <div>
+                  <CardTitle className="flex items-center text-lg sm:text-xl">
+                    <Users className="mr-2 h-5 w-5" />
+                    Niños en Seguimiento
+                  </CardTitle>
+                  <CardDescription className="text-sm">
+                    Niños a los que tienes acceso para registrar actividades
+                  </CardDescription>
+                </div>
+                
+                <Button variant="outline" size="sm" asChild className="self-start sm:self-auto">
+                  <Link href="/dashboard/children">
+                    <span className="sm:hidden">Ver</span>
+                    <span className="hidden sm:inline">Ver Todos</span>
                   </Link>
                 </Button>
               </div>
-              <CardDescription className="text-sm">
-                Últimos registros y observaciones
-              </CardDescription>
             </CardHeader>
-            <CardContent className="p-3 sm:p-6 pt-0">
-              {isLoading ? (
-                <div className="space-y-3">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="flex items-start space-x-3">
-                      <Skeleton className="h-10 w-10 rounded-full" />
-                      <div className="flex-1 space-y-2">
-                        <Skeleton className="h-4 w-3/4" />
-                        <Skeleton className="h-3 w-1/2" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : recentLogs.length > 0 ? (
-                <div className="space-y-2">
-                  {recentLogs.map((log) => (
-                    <RecentActivityItem key={log.id} log={log} />
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8 sm:py-12">
-                  <BookOpen className="h-8 w-8 sm:h-12 sm:w-12 text-gray-300 mx-auto mb-4" />
-                  <p className="text-sm sm:text-base text-gray-600">
-                    No hay actividad reciente
-                  </p>
-                  <Button size="sm" className="mt-4" asChild>
-                    <Link href="/dashboard/logs?action=new">
-                      Crear primer registro
-                    </Link>
-                  </Button>
-                </div>
-              )}
+            <CardContent>
+              <AccessibleChildren children={children} loading={childrenLoading} />
             </CardContent>
           </Card>
         </div>
 
-        {/* Overview */}
-        <div className="space-y-4 sm:space-y-6">
-          
-          {/* Progress Overview */}
-          <Card className="card-responsive">
-            <CardHeader className="pb-3 sm:pb-4">
-              <CardTitle className="text-base sm:text-lg">Progreso General</CardTitle>
-              <CardDescription className="text-sm">
-                Este mes
-              </CardDescription>
+        {/* Sidebar derecho */}
+        <div className="space-y-6">
+          {/* Resumen de actividad */}
+          <Card>
+            <CardHeader className="pb-4">
+              <CardTitle className="flex items-center text-lg">
+                <Activity className="mr-2 h-5 w-5" />
+                Resumen Semanal
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>Registros completados</span>
-                  <span className="font-medium">{stats.logs_this_month}</span>
-                </div>
-                <Progress value={calculatedStats.totalProgress} className="h-2" />
-                <p className="text-xs text-gray-600">
-                  {Math.round(calculatedStats.totalProgress)}% del objetivo mensual
-                </p>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600">Registros diarios</span>
+                <span className="font-medium">
+                  {stats.logs_this_week ? Math.round(stats.logs_this_week / 7) : 0} registros/día
+                </span>
               </div>
               
-              <div className="grid grid-cols-2 gap-3 pt-2">
-                <div className="text-center p-3 bg-gray-50 rounded-lg">
-                  <p className="text-lg sm:text-xl font-bold text-gray-900">{stats.logs_this_week}</p>
-                  <p className="text-xs text-gray-600">Esta semana</p>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600">Humor promedio</span>
+                <div className="flex items-center">
+                  <Heart className="h-4 w-4 text-red-400 mr-1" />
+                  <span className="font-medium">
+                    {stats.avg_mood_score ? stats.avg_mood_score.toFixed(1) : 'N/A'}/5
+                  </span>
                 </div>
-                <div className="text-center p-3 bg-blue-50 rounded-lg">
-                  <p className="text-lg sm:text-xl font-bold text-blue-700">{stats.active_categories}</p>
-                  <p className="text-xs text-blue-600">Categorías activas</p>
-                </div>
+              </div>
+              
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600">Último registro</span>
+                <span className="text-xs text-gray-500">
+                  {stats.last_log_date ? 
+                    format(new Date(stats.last_log_date), 'dd MMM', { locale: es }) : 
+                    'Ninguno'
+                  }
+                </span>
+              </div>
+
+              <div className="pt-2">
+                <Button variant="outline" size="sm" className="w-full" asChild>
+                  <Link href="/dashboard/reports">
+                    <BarChart3 className="mr-2 h-4 w-4" />
+                    Ver Reportes Completos
+                  </Link>
+                </Button>
               </div>
             </CardContent>
           </Card>
 
-          {/* Pending Tasks */}
-          {calculatedStats.pendingTasks > 0 && (
-            <Card className="card-responsive">
-              <CardHeader className="pb-3 sm:pb-4">
-                <CardTitle className="text-base sm:text-lg flex items-center">
-                  <Bell className="h-4 w-4 mr-2 text-orange-600" />
-                  Tareas Pendientes
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {stats.pending_reviews > 0 && (
-                  <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
-                    <div className="flex items-center space-x-2">
-                      <AlertCircle className="h-4 w-4 text-red-600" />
-                      <span className="text-sm font-medium text-red-900">
-                        Revisiones pendientes
-                      </span>
-                    </div>
-                    <Badge variant="destructive" className="text-xs">
-                      {stats.pending_reviews}
-                    </Badge>
-                  </div>
-                )}
-                
-                {stats.follow_ups_due > 0 && (
-                  <div className="flex items-center justify-between p-3 bg-orange-50 rounded-lg">
-                    <div className="flex items-center space-x-2">
-                      <Clock className="h-4 w-4 text-orange-600" />
-                      <span className="text-sm font-medium text-orange-900">
-                        Seguimientos vencidos
-                      </span>
-                    </div>
-                    <Badge variant="outline" className="text-xs border-orange-200 text-orange-700">
-                      {stats.follow_ups_due}
-                    </Badge>
-                  </div>
-                )}
-                
-                <Button size="sm" className="w-full" asChild>
-                  <Link href="/dashboard/logs?filter=pending">
-                    Ver todas las tareas
-                  </Link>
-                </Button>
-              </CardContent>
-            </Card>
-          )}
+          {/* Registros recientes */}
+          <Card>
+            <CardHeader className="pb-4">
+              <CardTitle className="flex items-center text-lg">
+                <BookOpen className="mr-2 h-5 w-5" />
+                Actividad Reciente
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <RecentLogs logs={logs} loading={logsLoading} />
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>
