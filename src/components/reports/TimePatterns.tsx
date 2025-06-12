@@ -1,10 +1,11 @@
 // ================================================================
 // src/components/reports/TimePatterns.tsx
-// CORREGIDO: Todos los componentes en un solo archivo con exports
+// ARREGLADO: Importar React y corregir todos los exports
 // ================================================================
 
 'use client';
 
+import React from 'react'; 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Clock, Calendar, TrendingUp, TrendingDown, Minus, Brain, Target, AlertTriangle, CheckCircle } from 'lucide-react';
@@ -342,11 +343,13 @@ export function AdvancedInsights({ logs }: AdvancedInsightsProps) {
                 insight.type === 'warning' ? 'bg-yellow-100' :
                 'bg-blue-100'
               }`}>
-                <insight.icon className={`h-5 w-5 ${
-                  insight.type === 'success' ? 'text-green-600' :
-                  insight.type === 'warning' ? 'text-yellow-600' :
-                  'text-blue-600'
-                }`} />
+                {React.createElement(insight.icon, {
+                  className: `h-5 w-5 ${
+                    insight.type === 'success' ? 'text-green-600' :
+                    insight.type === 'warning' ? 'text-yellow-600' :
+                    'text-blue-600'
+                  }`
+                })}
               </div>
               <div className="flex-1">
                 <h4 className="font-medium text-gray-900">{insight.title}</h4>
