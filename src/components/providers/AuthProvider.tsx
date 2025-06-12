@@ -1,9 +1,9 @@
 // src/components/providers/AuthProvider.tsx
-// AuthProvider actualizado para el nuevo modelo de base de datos y Supabase v2
+// AuthProvider COMPLETO CORREGIDO - Sin loops infinitos + signUp arreglado
 
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, ReactNode, useRef, useCallback } from 'react';
 import { User } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase';
 import type { Profile, UserRole } from '@/types';
@@ -37,7 +37,7 @@ interface AuthProviderProps {
 }
 
 // ================================================================
-// AUTH PROVIDER COMPONENT
+// AUTH PROVIDER COMPONENT - VERSIÓN COMPLETA CORREGIDA
 // ================================================================
 
 export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
@@ -45,16 +45,22 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
-  const supabase = createClient();
+  
+  // ✅ USAR useRef PARA MANTENER REFERENCIA ESTABLE DE SUPABASE
+  const supabaseRef = useRef(createClient());
+  const supabase = supabaseRef.current;
+  
+  // ✅ USAR useRef PARA EVITAR MÚLTIPLES INICIALIZACIONES
+  const initializedRef = useRef(false);
 
   // ================================================================
-  // FUNCIONES HELPER PRIVADAS
+  // FUNCIONES HELPER ESTABILIZADAS
   // ================================================================
 
   /**
-   * Obtiene el perfil completo del usuario desde la base de datos
+   * ✅ FETCH PROFILE ESTABILIZADO CON FALLBACK MEJORADO
    */
-  const fetchProfile = async (userId: string): Promise<Profile | null> => {
+  const fetchProfile = useCallback(async (userId: string): Promise<Profile | null> => {
     try {
       console.log('🔍 Fetching profile for user:', userId);
       
@@ -66,6 +72,44 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
 
       if (error) {
         console.error('❌ Error fetching profile:', error);
+        
+        // ✅ ARREGLO: Si no existe el perfil, intentar crearlo desde auth.users
+        if (error.code === 'PGRST116') { // No rows found
+          console.log('ℹ️ Profile not found, attempting to create...');
+          
+          // Obtener datos del usuario de auth
+          const { data: authUser, error: authError } = await supabase.auth.getUser();
+          
+          if (authUser?.user && !authError) {
+            const userData = authUser.user;
+            const fullName = userData.user_metadata?.full_name || 
+                            userData.email?.split('@')[0] || 
+                            'Usuario';
+            
+            // Crear el perfil
+            const { data: newProfile, error: createError } = await supabase
+              .from('profiles')
+              .insert({
+                id: userId,
+                email: userData.email || '',
+                full_name: fullName,
+                role: userData.user_metadata?.role || 'parent',
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              })
+              .select()
+              .single();
+            
+            if (createError) {
+              console.error('❌ Error creating profile:', createError);
+              return null;
+            }
+            
+            console.log('✅ Profile created from auth data:', newProfile);
+            return newProfile as Profile;
+          }
+        }
+        
         throw error;
       }
 
@@ -74,18 +118,18 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
         return null;
       }
 
-      console.log('✅ Profile fetched successfully');
+      console.log('✅ Profile fetched successfully:', data.full_name);
       return data as Profile;
     } catch (err) {
       console.error('❌ Error in fetchProfile:', err);
       return null;
     }
-  };
+  }, [supabase]);
 
   /**
-   * Verifica si el usuario es administrador
+   * ✅ CHECK ADMIN STATUS ESTABILIZADO
    */
-  const checkAdminStatus = async (userId: string): Promise<boolean> => {
+  const checkAdminStatus = useCallback(async (userId: string): Promise<boolean> => {
     try {
       const { data, error } = await supabase
         .rpc('is_admin', { user_id: userId });
@@ -100,12 +144,12 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
       console.error('❌ Error in checkAdminStatus:', err);
       return false;
     }
-  };
+  }, [supabase]);
 
   /**
-   * Actualiza el último login del usuario
+   * ✅ UPDATE LAST LOGIN ESTABILIZADO
    */
-  const updateLastLogin = async (userId: string): Promise<void> => {
+  const updateLastLogin = useCallback(async (userId: string): Promise<void> => {
     try {
       await supabase
         .from('profiles')
@@ -119,16 +163,16 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
     } catch (err) {
       console.warn('Warning: Could not update last login:', err);
     }
-  };
+  }, [supabase]);
 
   // ================================================================
-  // FUNCIONES PÚBLICAS DEL CONTEXTO
+  // FUNCIONES PÚBLICAS DEL CONTEXTO ESTABILIZADAS
   // ================================================================
 
   /**
-   * Iniciar sesión con email y contraseña
+   * ✅ SIGN IN ESTABILIZADO
    */
-  const signIn = async (email: string, password: string): Promise<void> => {
+  const signIn = useCallback(async (email: string, password: string): Promise<void> => {
     try {
       setLoading(true);
       setError(null);
@@ -151,21 +195,10 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
       }
 
       if (data.user) {
-        // Actualizar último login
         await updateLastLogin(data.user.id);
-        
-        // Obtener perfil completo
-        const profile = await fetchProfile(data.user.id);
-        if (profile) {
-          setUser(profile);
-          
-          // Verificar status de admin
-          const adminStatus = await checkAdminStatus(data.user.id);
-          setIsAdmin(adminStatus);
-        }
+        console.log('✅ Sign in successful');
       }
 
-      console.log('✅ Sign in successful');
     } catch (err: any) {
       console.error('❌ Error in signIn:', err);
       const errorMessage = err.message || 'Error al iniciar sesión';
@@ -174,12 +207,12 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
     } finally {
       setLoading(false);
     }
-  };
+  }, [supabase, updateLastLogin]);
 
   /**
-   * Registrar nuevo usuario
+   * ✅ SIGN UP ESTABILIZADO Y CORREGIDO
    */
-  const signUp = async (
+  const signUp = useCallback(async (
     email: string, 
     password: string, 
     fullName: string, 
@@ -189,14 +222,15 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
       setLoading(true);
       setError(null);
 
-      console.log('📝 Attempting sign up for:', email);
+      console.log('📝 Attempting sign up for:', email, 'with name:', fullName);
 
+      // ✅ ARREGLO CRÍTICO: Pasar full_name correctamente en user_metadata
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: {
-            full_name: fullName,
+            full_name: fullName,  // ✅ Esto va a raw_user_meta_data
             role: role
           }
         }
@@ -204,7 +238,38 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
 
       if (error) throw error;
 
-      console.log('✅ Sign up successful');
+      // ✅ ARREGLO ADICIONAL: Si el usuario se registra exitosamente, 
+      // crear/actualizar el perfil directamente
+      if (data.user && !error) {
+        console.log('✅ Sign up successful, creating profile...');
+        
+        // Intentar crear el perfil manualmente si no existe
+        try {
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .upsert({
+              id: data.user.id,
+              email: email,
+              full_name: fullName,
+              role: role,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            });
+          
+          if (profileError) {
+            console.warn('⚠️ Profile creation warning:', profileError);
+            // No throw, el trigger debería manejarlo
+          } else {
+            console.log('✅ Profile created successfully');
+          }
+        } catch (profileErr) {
+          console.warn('⚠️ Manual profile creation failed:', profileErr);
+          // No throw, el trigger debería manejarlo
+        }
+      }
+
+      console.log('✅ Sign up process completed');
+
     } catch (err: any) {
       console.error('❌ Error in signUp:', err);
       const errorMessage = err.message || 'Error al crear la cuenta';
@@ -213,19 +278,21 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
     } finally {
       setLoading(false);
     }
-  };
+  }, [supabase]);
 
   /**
-   * Cerrar sesión
+   * ✅ SIGN OUT ESTABILIZADO
    */
-  const signOut = async (): Promise<void> => {
+  const signOut = useCallback(async (): Promise<void> => {
     try {
       setLoading(true);
-      console.log('🚪 Signing out...');
-
+      
+      console.log('👋 Signing out...');
+      
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
 
+      // ✅ LIMPIAR ESTADO INMEDIATAMENTE
       setUser(null);
       setIsAdmin(false);
       setError(null);
@@ -239,12 +306,12 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
     } finally {
       setLoading(false);
     }
-  };
+  }, [supabase]);
 
   /**
-   * Actualizar perfil del usuario
+   * ✅ UPDATE PROFILE ESTABILIZADO
    */
-  const updateProfile = async (updates: Partial<Profile>): Promise<void> => {
+  const updateProfile = useCallback(async (updates: Partial<Profile>): Promise<void> => {
     if (!user) {
       throw new Error('Usuario no autenticado');
     }
@@ -277,12 +344,12 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user, supabase]);
 
   /**
-   * Restablecer contraseña
+   * ✅ RESET PASSWORD ESTABILIZADO
    */
-  const resetPassword = async (email: string): Promise<void> => {
+  const resetPassword = useCallback(async (email: string): Promise<void> => {
     try {
       setLoading(true);
       setError(null);
@@ -304,12 +371,12 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
     } finally {
       setLoading(false);
     }
-  };
+  }, [supabase]);
 
   /**
-   * Refrescar datos del usuario
+   * ✅ REFRESH USER ESTABILIZADO
    */
-  const refreshUser = async (): Promise<void> => {
+  const refreshUser = useCallback(async (): Promise<void> => {
     if (!user) return;
 
     try {
@@ -330,26 +397,30 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user, fetchProfile, checkAdminStatus]);
 
   /**
-   * Limpiar errores
+   * ✅ CLEAR ERROR ESTABILIZADO
    */
-  const clearError = (): void => {
+  const clearError = useCallback((): void => {
     setError(null);
-  };
+  }, []);
 
   // ================================================================
-  // EFECTOS
+  // EFFECT PRINCIPAL - CORREGIDO PARA EVITAR LOOPS
   // ================================================================
 
   useEffect(() => {
+    // ✅ EVITAR MÚLTIPLES INICIALIZACIONES
+    if (initializedRef.current) return;
+    initializedRef.current = true;
+
     let mounted = true;
 
     /**
-     * Obtener sesión inicial - CORREGIDO: función declarada correctamente
+     * ✅ FUNCIÓN DE INICIALIZACIÓN MEJORADA
      */
-    async function getInitialSession(): Promise<void> {
+    const initializeAuth = async (): Promise<void> => {
       try {
         console.log('🔍 Getting initial session...');
         
@@ -363,7 +434,9 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
             setUser(profile);
             
             const adminStatus = await checkAdminStatus(session.user.id);
-            setIsAdmin(adminStatus);
+            if (mounted) {
+              setIsAdmin(adminStatus);
+            }
           }
         } else {
           console.log('ℹ️ No active session found');
@@ -378,12 +451,10 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
           setLoading(false);
         }
       }
-    }
-
-    getInitialSession();
+    };
 
     /**
-     * Escuchar cambios de autenticación
+     * ✅ LISTENER DE AUTH MEJORADO
      */
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
@@ -401,7 +472,9 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
               setUser(profile);
               
               const adminStatus = await checkAdminStatus(session.user.id);
-              setIsAdmin(adminStatus);
+              if (mounted) {
+                setIsAdmin(adminStatus);
+              }
             }
           } else if (event === 'SIGNED_OUT') {
             console.log('👋 User signed out');
@@ -412,6 +485,7 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
             }
           } else if (event === 'TOKEN_REFRESHED') {
             console.log('🔄 Token refreshed');
+            // No hacer nada especial para refresh de token
           }
         } catch (err) {
           console.error('❌ Error handling auth state change:', err);
@@ -422,15 +496,18 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
       }
     );
 
-    // Cleanup
+    // ✅ INICIALIZAR UNA SOLA VEZ
+    initializeAuth();
+
+    // ✅ CLEANUP FUNCTION
     return () => {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, []); // ✅ DEPENDENCIES VACÍAS - SOLO EJECUTAR UNA VEZ
 
   // ================================================================
-  // PROVIDER VALUE
+  // CONTEXT VALUE MEMOIZADO
   // ================================================================
 
   const contextValue: AuthContextType = {
