@@ -1,7 +1,7 @@
+// src/hooks/use-toast.ts
 "use client"
 
 import * as React from "react"
-
 import type {
   ToastActionElement,
   ToastProps,
@@ -92,7 +92,6 @@ export const reducer = (state: State, action: Action): State => {
     case "DISMISS_TOAST": {
       const { toastId } = action
 
-      // If no toastId is provided, dismiss all toasts
       if (toastId) {
         addToRemoveQueue(toastId)
       } else {

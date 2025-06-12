@@ -1,10 +1,10 @@
 // src/hooks/use-children.ts
-// Hook actualizado para gestión de niños con el nuevo modelo
+// Hook actualizado para gestión de niños SIN usar vistas - usando JOINs directos
 
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { supabase, userCanAccessChild, userCanEditChild, auditSensitiveAccess } from '@/lib/supabase';
+import { createClient, userCanAccessChild, userCanEditChild, auditSensitiveAccess } from '@/lib/supabase';
 import { useAuth } from '@/components/providers/AuthProvider';
 import type { 
   ChildWithRelation, 
@@ -57,13 +57,14 @@ export function useChildren(options: UseChildrenOptions = {}): UseChildrenReturn
   const [children, setChildren] = useState<ChildWithRelation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const supabase = createClient();
 
   // ================================================================
   // FUNCIONES PRINCIPALES
   // ================================================================
 
   /**
-   * Obtener todos los niños accesibles para el usuario actual
+   * Obtener niños accesibles para el usuario usando JOINs directos
    */
   const fetchChildren = useCallback(async (): Promise<void> => {
     if (!user) {
@@ -76,74 +77,90 @@ export function useChildren(options: UseChildrenOptions = {}): UseChildrenReturn
       setLoading(true);
       setError(null);
 
-      console.log('📚 Fetching accessible children...');
+      console.log('👶 Fetching children for user:', user.id);
 
-      // Usar la vista optimizada que ya incluye RLS
+      // Usar JOIN directo en lugar de vista
       let query = supabase
-        .from('user_accessible_children')
-        .select('*')
-        .order('name');
+        .from('children')
+        .select(`
+          id,
+          name,
+          birth_date,
+          diagnosis,
+          notes,
+          is_active,
+          avatar_url,
+          emergency_contact,
+          medical_info,
+          educational_info,
+          privacy_settings,
+          created_by,
+          created_at,
+          updated_at,
+          user_child_relations!inner(
+            relationship_type,
+            can_view,
+            can_edit,
+            can_export,
+            can_invite_others,
+            is_active
+          )
+        `)
+        .eq('user_child_relations.user_id', user.id)
+        .eq('user_child_relations.is_active', true);
 
-      // Filtrar por estado activo si es necesario
+      // Filtrar por estado activo si se requiere
       if (!includeInactive) {
         query = query.eq('is_active', true);
       }
 
-      const { data, error } = await query;
+      // Filtrar relaciones no expiradas
+      query = query.or('user_child_relations.expires_at.is.null,user_child_relations.expires_at.gt.' + new Date().toISOString());
 
-      if (error) {
-        console.error('❌ Error fetching children:', error);
-        throw error;
+      const { data, error: fetchError } = await query.order('name');
+
+      if (fetchError) {
+        console.error('❌ Error fetching children:', fetchError);
+        throw fetchError;
       }
 
-      console.log(`✅ Fetched ${data?.length || 0} children`);
-      
-      // Convertir a formato ChildWithRelation
-      const childrenWithRelations: ChildWithRelation[] = (data || []).map(child => ({
-        id: child.id!,
-        name: child.name!,
-        birth_date: child.birth_date,
-        diagnosis: child.diagnosis,
-        notes: child.notes,
-        is_active: child.is_active!,
-        avatar_url: child.avatar_url,
-        emergency_contact: child.emergency_contact as any || [],
-        medical_info: child.medical_info as any || {},
-        educational_info: child.educational_info as any || {},
-        privacy_settings: child.privacy_settings as any || { 
-          share_with_specialists: true, 
-          share_progress_reports: true 
-        },
-        created_by: child.created_by!,
-        created_at: child.created_at!,
-        updated_at: child.updated_at!,
-        relationship_type: child.relationship_type!,
-        can_edit: child.can_edit!,
-        can_view: child.can_view!,
-        can_export: child.can_export!,
-        can_invite_others: child.can_invite_others!,
-        granted_at: child.granted_at!,
-        expires_at: child.expires_at,
-        creator_name: child.creator_name!
-      }));
+      console.log('✅ Children fetched successfully:', data?.length || 0);
 
-      setChildren(childrenWithRelations);
+      // Transformar datos para que coincidan con la interfaz esperada
+      const transformedData = data?.map(child => ({
+        ...child,
+        // Extraer datos de la relación del primer elemento (siempre habrá solo uno por el JOIN)
+        relationship_type: child.user_child_relations[0]?.relationship_type,
+        can_view: child.user_child_relations[0]?.can_view,
+        can_edit: child.user_child_relations[0]?.can_edit,
+        can_export: child.user_child_relations[0]?.can_export,
+        can_invite_others: child.user_child_relations[0]?.can_invite_others,
+        // Remover el array de relaciones ya que no lo necesitamos en la interfaz
+        user_child_relations: undefined
+      })) || [];
+
+      setChildren(transformedData as ChildWithRelation[]);
 
       // Registrar acceso para auditoría
-      for (const child of childrenWithRelations) {
-        await auditSensitiveAccess('children', child.id, 'SELECT');
+      if (transformedData && transformedData.length > 0) {
+        await auditSensitiveAccess(
+          'VIEW_CHILDREN_LIST',
+          user.id,
+          `Accessed ${transformedData.length} children`
+        );
       }
 
     } catch (err) {
       console.error('❌ Error in fetchChildren:', err);
-      setError(err instanceof Error ? err.message : 'Error loading children');
+      const errorMessage = err instanceof Error ? err.message : 'Error al cargar los niños';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
-  }, [user, includeInactive]);
+  }, [user, includeInactive, supabase]);
 
   /**
-   * Crear un nuevo niño
+   * Crear nuevo niño
    */
   const createChild = useCallback(async (childData: ChildInsert): Promise<Child> => {
     if (!user) {
@@ -156,20 +173,12 @@ export function useChildren(options: UseChildrenOptions = {}): UseChildrenReturn
 
       console.log('👶 Creating new child:', childData.name);
 
-      // Asegurar que el usuario sea el creador
-      const dataToInsert = {
-        ...childData,
-        created_by: user.id,
-        privacy_settings: {
-          share_with_specialists: true,
-          share_progress_reports: true,
-          ...childData.privacy_settings
-        }
-      };
-
-      const { data, error } = await supabase
+      const { data: child, error } = await supabase
         .from('children')
-        .insert(dataToInsert)
+        .insert({
+          ...childData,
+          created_by: user.id
+        })
         .select()
         .single();
 
@@ -178,24 +187,50 @@ export function useChildren(options: UseChildrenOptions = {}): UseChildrenReturn
         throw error;
       }
 
-      console.log('✅ Child created successfully:', data);
+      // Crear relación automática como padre/creador
+      const { error: relationError } = await supabase
+        .from('user_child_relations')
+        .insert({
+          user_id: user.id,
+          child_id: child.id,
+          relationship_type: 'parent',
+          can_view: true,
+          can_edit: true,
+          can_export: true,
+          can_invite_others: true,
+          granted_by: user.id
+        });
 
-      // Refrescar la lista
+      if (relationError) {
+        console.error('❌ Error creating child relation:', relationError);
+        // No hacer throw aquí, el niño ya se creó
+      }
+
+      console.log('✅ Child created successfully:', child.id);
+
+      // Refrescar lista
       await fetchChildren();
 
-      return data as Child;
+      // Auditoría
+      await auditSensitiveAccess(
+        'CREATE_CHILD',
+        child.id,
+        `Created child: ${child.name}`
+      );
+
+      return child;
     } catch (err) {
       console.error('❌ Error in createChild:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Error creating child';
+      const errorMessage = err instanceof Error ? err.message : 'Error al crear el niño';
       setError(errorMessage);
       throw new Error(errorMessage);
     } finally {
       setLoading(false);
     }
-  }, [user, fetchChildren]);
+  }, [user, fetchChildren, supabase]);
 
   /**
-   * Actualizar un niño existente
+   * Actualizar niño
    */
   const updateChild = useCallback(async (id: string, updates: ChildUpdate): Promise<Child> => {
     if (!user) {
@@ -206,10 +241,10 @@ export function useChildren(options: UseChildrenOptions = {}): UseChildrenReturn
       setLoading(true);
       setError(null);
 
-      console.log('📝 Updating child:', id);
+      console.log('👶 Updating child:', id);
 
-      // Verificar permisos antes de actualizar
-      const canEdit = await userCanEditChild(id);
+      // Verificar permisos
+      const canEdit = await userCanEditChild(id, user.id);
       if (!canEdit) {
         throw new Error('No tienes permisos para editar este niño');
       }
@@ -229,24 +264,31 @@ export function useChildren(options: UseChildrenOptions = {}): UseChildrenReturn
         throw error;
       }
 
-      console.log('✅ Child updated successfully:', data);
+      console.log('✅ Child updated successfully:', data.id);
 
-      // Refrescar la lista
+      // Refrescar lista
       await fetchChildren();
 
-      return data as Child;
+      // Auditoría
+      await auditSensitiveAccess(
+        'UPDATE_CHILD',
+        data.id,
+        `Updated child: ${data.name}`
+      );
+
+      return data;
     } catch (err) {
       console.error('❌ Error in updateChild:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Error updating child';
+      const errorMessage = err instanceof Error ? err.message : 'Error al actualizar el niño';
       setError(errorMessage);
       throw new Error(errorMessage);
     } finally {
       setLoading(false);
     }
-  }, [user, fetchChildren]);
+  }, [user, fetchChildren, supabase]);
 
   /**
-   * Eliminar (desactivar) un niño
+   * Eliminar niño (soft delete)
    */
   const deleteChild = useCallback(async (id: string): Promise<void> => {
     if (!user) {
@@ -257,39 +299,56 @@ export function useChildren(options: UseChildrenOptions = {}): UseChildrenReturn
       setLoading(true);
       setError(null);
 
-      console.log('🗑️ Soft deleting child:', id);
+      console.log('👶 Deleting child:', id);
 
-      // Solo soft delete - cambiar is_active a false
+      // Verificar permisos (solo el creador puede eliminar)
+      const { data: child } = await supabase
+        .from('children')
+        .select('created_by, name')
+        .eq('id', id)
+        .single();
+
+      if (!child || child.created_by !== user.id) {
+        throw new Error('Solo el creador puede eliminar un niño');
+      }
+
       const { error } = await supabase
         .from('children')
-        .update({ 
+        .update({
           is_active: false,
           updated_at: new Date().toISOString()
         })
-        .eq('id', id)
-        .eq('created_by', user.id); // Solo el creador puede eliminar
+        .eq('id', id);
 
       if (error) {
         console.error('❌ Error deleting child:', error);
         throw error;
       }
 
-      console.log('✅ Child deleted successfully');
+      console.log('✅ Child deleted successfully:', id);
 
-      // Refrescar la lista
+      // Refrescar lista
       await fetchChildren();
+
+      // Auditoría
+      await auditSensitiveAccess(
+        'DELETE_CHILD',
+        id,
+        `Deleted child: ${child.name}`
+      );
+
     } catch (err) {
       console.error('❌ Error in deleteChild:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Error deleting child';
+      const errorMessage = err instanceof Error ? err.message : 'Error al eliminar el niño';
       setError(errorMessage);
       throw new Error(errorMessage);
     } finally {
       setLoading(false);
     }
-  }, [user, fetchChildren]);
+  }, [user, fetchChildren, supabase]);
 
   /**
-   * Agregar usuario a un niño con permisos específicos
+   * Agregar usuario a un niño
    */
   const addUserToChild = useCallback(async (
     childId: string, 
@@ -304,19 +363,16 @@ export function useChildren(options: UseChildrenOptions = {}): UseChildrenReturn
       setLoading(true);
       setError(null);
 
-      console.log('👥 Adding user to child:', { childId, userId, relation });
-
-      const relationData = {
-        ...relation,
-        user_id: userId,
-        child_id: childId,
-        granted_by: user.id,
-        granted_at: new Date().toISOString()
-      };
+      console.log('👥 Adding user to child:', { childId, userId });
 
       const { error } = await supabase
         .from('user_child_relations')
-        .insert(relationData);
+        .insert({
+          user_id: userId,
+          child_id: childId,
+          granted_by: user.id,
+          ...relation
+        });
 
       if (error) {
         console.error('❌ Error adding user to child:', error);
@@ -325,17 +381,25 @@ export function useChildren(options: UseChildrenOptions = {}): UseChildrenReturn
 
       console.log('✅ User added to child successfully');
 
-      // Refrescar la lista
+      // Refrescar lista
       await fetchChildren();
+
+      // Auditoría
+      await auditSensitiveAccess(
+        'ADD_USER_TO_CHILD',
+        childId,
+        `Added user ${userId} with role ${relation.relationship_type}`
+      );
+
     } catch (err) {
       console.error('❌ Error in addUserToChild:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Error adding user to child';
+      const errorMessage = err instanceof Error ? err.message : 'Error al agregar usuario';
       setError(errorMessage);
       throw new Error(errorMessage);
     } finally {
       setLoading(false);
     }
-  }, [user, fetchChildren]);
+  }, [user, fetchChildren, supabase]);
 
   /**
    * Remover usuario de un niño
@@ -352,11 +416,11 @@ export function useChildren(options: UseChildrenOptions = {}): UseChildrenReturn
       setLoading(true);
       setError(null);
 
-      console.log('🚫 Removing user from child:', { childId, userId });
+      console.log('👥 Removing user from child:', { childId, userId });
 
       const { error } = await supabase
         .from('user_child_relations')
-        .delete()
+        .update({ is_active: false })
         .eq('child_id', childId)
         .eq('user_id', userId);
 
@@ -367,17 +431,25 @@ export function useChildren(options: UseChildrenOptions = {}): UseChildrenReturn
 
       console.log('✅ User removed from child successfully');
 
-      // Refrescar la lista
+      // Refrescar lista
       await fetchChildren();
+
+      // Auditoría
+      await auditSensitiveAccess(
+        'REMOVE_USER_FROM_CHILD',
+        childId,
+        `Removed user ${userId}`
+      );
+
     } catch (err) {
       console.error('❌ Error in removeUserFromChild:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Error removing user from child';
+      const errorMessage = err instanceof Error ? err.message : 'Error al remover usuario';
       setError(errorMessage);
       throw new Error(errorMessage);
     } finally {
       setLoading(false);
     }
-  }, [user, fetchChildren]);
+  }, [user, fetchChildren, supabase]);
 
   /**
    * Refrescar lista de niños
@@ -394,21 +466,21 @@ export function useChildren(options: UseChildrenOptions = {}): UseChildrenReturn
   }, [children]);
 
   /**
-   * Filtrar niños según criterios
+   * Filtrar niños
    */
   const filterChildren = useCallback((filters: ChildFilters): ChildWithRelation[] => {
     return children.filter(child => {
-      // Filtro por término de búsqueda
-      if (filters.search_term) {
-        const term = filters.search_term.toLowerCase();
-        if (!child.name.toLowerCase().includes(term) &&
-            !child.diagnosis?.toLowerCase().includes(term)) {
+      // Filtro por texto
+      if (filters.search) {
+        const searchLower = filters.search.toLowerCase();
+        if (!child.name.toLowerCase().includes(searchLower) &&
+            !child.diagnosis?.toLowerCase().includes(searchLower)) {
           return false;
         }
       }
 
-      // Filtro por tipo de relación
-      if (filters.relationship_type && child.relationship_type !== filters.relationship_type) {
+      // Filtro por relación
+      if (filters.relationship && child.relationship_type !== filters.relationship) {
         return false;
       }
 
@@ -417,52 +489,31 @@ export function useChildren(options: UseChildrenOptions = {}): UseChildrenReturn
         return false;
       }
 
-      // Filtro por edad
-      if (child.birth_date && (filters.age_min || filters.age_max)) {
-        const birthDate = new Date(child.birth_date);
-        const age = Math.floor((Date.now() - birthDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
-        
-        if (filters.age_min && age < filters.age_min) return false;
-        if (filters.age_max && age > filters.age_max) return false;
-      }
-
-      // Filtro por diagnóstico
-      if (filters.has_diagnosis !== undefined) {
-        const hasDiagnosis = Boolean(child.diagnosis && child.diagnosis.trim());
-        if (hasDiagnosis !== filters.has_diagnosis) return false;
-      }
-
       return true;
     });
   }, [children]);
 
   /**
-   * Verificar si puede editar un niño
+   * Verificar si el usuario puede editar un niño
    */
   const canEditChild = useCallback(async (childId: string): Promise<boolean> => {
-    return await userCanEditChild(childId);
-  }, []);
+    return await userCanEditChild(childId, user?.id);
+  }, [user]);
 
   /**
-   * Verificar si puede acceder a un niño
+   * Verificar si el usuario puede acceder a un niño
    */
   const canAccessChild = useCallback(async (childId: string): Promise<boolean> => {
-    return await userCanAccessChild(childId);
-  }, []);
+    return await userCanAccessChild(childId, user?.id);
+  }, [user]);
 
   // ================================================================
-  // EFECTOS
+  // EFFECTS
   // ================================================================
 
-  // Cargar niños cuando cambie el usuario
   useEffect(() => {
-    if (user) {
-      fetchChildren();
-    } else {
-      setChildren([]);
-      setLoading(false);
-    }
-  }, [user, fetchChildren]);
+    fetchChildren();
+  }, [fetchChildren]);
 
   // Configurar realtime si está habilitado
   useEffect(() => {
@@ -470,17 +521,15 @@ export function useChildren(options: UseChildrenOptions = {}): UseChildrenReturn
 
     console.log('🔄 Setting up realtime subscription for children');
 
-    const subscription = supabase
-      .channel('children_changes')
+    const channel = supabase
+      .channel('children-changes')
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
         table: 'children'
       }, (payload) => {
         console.log('🔄 Children realtime update:', payload);
-        if (autoRefresh) {
-          fetchChildren();
-        }
+        fetchChildren();
       })
       .on('postgres_changes', {
         event: '*',
@@ -488,21 +537,15 @@ export function useChildren(options: UseChildrenOptions = {}): UseChildrenReturn
         table: 'user_child_relations'
       }, (payload) => {
         console.log('🔄 Relations realtime update:', payload);
-        if (autoRefresh) {
-          fetchChildren();
-        }
+        fetchChildren();
       })
       .subscribe();
 
     return () => {
       console.log('🔄 Cleaning up children realtime subscription');
-      subscription.unsubscribe();
+      supabase.removeChannel(channel);
     };
-  }, [realtime, user, autoRefresh, fetchChildren]);
-
-  // ================================================================
-  // RETURN
-  // ================================================================
+  }, [realtime, user, fetchChildren, supabase]);
 
   return {
     children,
@@ -517,6 +560,6 @@ export function useChildren(options: UseChildrenOptions = {}): UseChildrenReturn
     getChildById,
     filterChildren,
     canEditChild,
-    canAccessChild,
+    canAccessChild
   };
 }

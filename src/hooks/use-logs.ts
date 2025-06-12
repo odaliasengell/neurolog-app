@@ -1,10 +1,10 @@
 // src/hooks/use-logs.ts
-// Hook actualizado para gestión de registros diarios con el nuevo modelo
+// Hook actualizado para gestión de registros diarios SIN usar vistas - usando JOINs directos
 
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { supabase, userCanAccessChild, userCanEditChild, auditSensitiveAccess } from '@/lib/supabase';
+import { createClient, userCanAccessChild, userCanEditChild, auditSensitiveAccess } from '@/lib/supabase';
 import { useAuth } from '@/components/providers/AuthProvider';
 import type { 
   LogWithDetails, 
@@ -78,13 +78,36 @@ export function useLogs(options: UseLogsOptions = {}): UseLogsReturn {
   const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [currentPage, setCurrentPage] = useState(0);
+  const supabase = createClient();
+
+  // ================================================================
+  // FUNCIÓN HELPER PARA OBTENER NIÑOS ACCESIBLES
+  // ================================================================
+
+  const getAccessibleChildrenIds = useCallback(async (): Promise<string[]> => {
+    if (!user) return [];
+
+    try {
+      const { data } = await supabase
+        .from('user_child_relations')
+        .select('child_id')
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .or('expires_at.is.null,expires_at.gt.' + new Date().toISOString());
+
+      return data?.map(r => r.child_id) || [];
+    } catch (error) {
+      console.error('Error getting accessible children:', error);
+      return [];
+    }
+  }, [user, supabase]);
 
   // ================================================================
   // FUNCIONES PRINCIPALES
   // ================================================================
 
   /**
-   * Obtener logs con detalles completos
+   * Obtener logs con detalles completos usando JOINs directos
    */
   const fetchLogs = useCallback(async (page: number = 0, append: boolean = false): Promise<void> => {
     if (!user) {
@@ -101,114 +124,85 @@ export function useLogs(options: UseLogsOptions = {}): UseLogsReturn {
 
       console.log(`📚 Fetching logs (page ${page})...`);
 
-      // Construir query base con joins para detalles
+      // Obtener IDs de niños accesibles
+      const accessibleChildrenIds = await getAccessibleChildrenIds();
+      
+      if (accessibleChildrenIds.length === 0) {
+        setLogs([]);
+        setHasMore(false);
+        return;
+      }
+
+      // Construir query con joins para obtener detalles completos
       let query = supabase
         .from('daily_logs')
         .select(`
           *,
-          children!inner (
-            id,
-            name,
-            avatar_url
-          ),
-          categories (
-            name,
-            color,
-            icon
-          ),
-          profiles!daily_logs_logged_by_fkey (
-            full_name,
-            avatar_url
-          ),
-          profiles!daily_logs_reviewed_by_fkey (
-            full_name
-          )
-        `)
-        .order('created_at', { ascending: false })
-        .range(page * pageSize, (page + 1) * pageSize - 1);
+          child:children(id, name, avatar_url),
+          category:categories(id, name, color, icon),
+          logged_by_profile:profiles!logged_by(id, full_name, avatar_url),
+          reviewed_by_profile:profiles!reviewed_by(id, full_name, avatar_url)
+        `);
 
-      // Aplicar filtros
+      // Filtros
       if (childId) {
         query = query.eq('child_id', childId);
+      } else {
+        // Solo logs de niños accesibles
+        query = query.in('child_id', accessibleChildrenIds);
       }
 
       if (!includeDeleted) {
         query = query.eq('is_deleted', false);
       }
 
-      // El filtro de privacidad se maneja automáticamente por RLS
-      // pero podemos agregar lógica adicional si es necesario
-
-      const { data, error } = await query;
-
-      if (error) {
-        console.error('❌ Error fetching logs:', error);
-        throw error;
+      if (!includePrivate && user.role !== 'admin') {
+        query = query.eq('is_private', false);
       }
 
-      console.log(`✅ Fetched ${data?.length || 0} logs`);
+      // Paginación
+      const from = page * pageSize;
+      const to = from + pageSize - 1;
 
-      // Transformar datos a LogWithDetails
-      const logsWithDetails: LogWithDetails[] = (data || []).map(log => ({
-        id: log.id,
-        child_id: log.child_id,
-        category_id: log.category_id,
-        title: log.title,
-        content: log.content,
-        mood_score: log.mood_score,
-        intensity_level: log.intensity_level,
-        logged_by: log.logged_by,
-        log_date: log.log_date,
-        is_private: log.is_private,
-        is_deleted: log.is_deleted,
-        is_flagged: log.is_flagged,
-        attachments: log.attachments as any || [],
-        tags: log.tags || [],
-        location: log.location,
-        weather: log.weather,
-        reviewed_by: log.reviewed_by,
-        reviewed_at: log.reviewed_at,
-        specialist_notes: log.specialist_notes,
-        parent_feedback: log.parent_feedback,
-        follow_up_required: log.follow_up_required,
-        follow_up_date: log.follow_up_date,
-        created_at: log.created_at,
-        updated_at: log.updated_at,
-        // Datos de relaciones
-        child_name: log.children?.name || 'Niño desconocido',
-        child_avatar_url: log.children?.avatar_url,
-        category_name: log.categories?.name || null,
-        category_color: log.categories?.color || '#3B82F6',
-        category_icon: log.categories?.icon || 'circle',
-        logged_by_name: log.profiles?.full_name || 'Usuario desconocido',
-        logged_by_avatar: log.profiles?.avatar_url,
-        reviewer_name: log.profiles?.full_name || null,
-        can_edit: log.logged_by === user.id || user.role === 'specialist'
-      }));
+      const { data, error: fetchError } = await query
+        .order('created_at', { ascending: false })
+        .range(from, to);
 
+      if (fetchError) {
+        console.error('❌ Error fetching logs:', fetchError);
+        throw fetchError;
+      }
+
+      console.log('✅ Logs fetched successfully:', data?.length || 0);
+
+      const newLogs = data || [];
+      
       if (append) {
-        setLogs(prev => [...prev, ...logsWithDetails]);
+        setLogs(prev => [...prev, ...newLogs]);
       } else {
-        setLogs(logsWithDetails);
+        setLogs(newLogs);
       }
 
-      // Verificar si hay más páginas
-      setHasMore(data?.length === pageSize);
+      // Determinar si hay más páginas
+      setHasMore(newLogs.length === pageSize);
 
       // Registrar acceso para auditoría
-      for (const log of logsWithDetails) {
-        await auditSensitiveAccess('daily_logs', log.id, 'SELECT');
+      if (newLogs.length > 0) {
+        await auditSensitiveAccess(
+          'VIEW_LOGS_LIST',
+          user.id,
+          `Accessed ${newLogs.length} logs (page ${page})`
+        );
       }
 
     } catch (err) {
       console.error('❌ Error in fetchLogs:', err);
-      setError(err instanceof Error ? err.message : 'Error loading logs');
+      const errorMessage = err instanceof Error ? err.message : 'Error al cargar los registros';
+      setError(errorMessage);
     } finally {
-      if (!append) {
-        setLoading(false);
-      }
+      setLoading(false);
     }
-  }, [user, childId, includeDeleted, pageSize]);
+  }, [user, childId, includePrivate, includeDeleted, pageSize, supabase, getAccessibleChildrenIds]);
 
   /**
    * Obtener estadísticas del dashboard
@@ -219,64 +213,96 @@ export function useLogs(options: UseLogsOptions = {}): UseLogsReturn {
     try {
       console.log('📊 Fetching dashboard stats...');
 
-      // Usar la vista optimizada
-      const { data: childStats } = await supabase
-        .from('child_log_statistics')
-        .select('*');
+      // Obtener IDs de niños accesibles primero
+      const accessibleChildrenIds = await getAccessibleChildrenIds();
 
-      if (childStats) {
-        const stats: DashboardStats = {
-          total_children: childStats.length,
-          total_logs: childStats.reduce((sum, child) => sum + (child.total_logs || 0), 0),
-          logs_this_week: childStats.reduce((sum, child) => sum + (child.logs_this_week || 0), 0),
-          logs_this_month: childStats.reduce((sum, child) => sum + (child.logs_this_month || 0), 0),
-          last_log_date: childStats.reduce((latest, child) => {
-            if (!child.last_log_date) return latest;
-            if (!latest) return child.last_log_date;
-            return child.last_log_date > latest ? child.last_log_date : latest;
-          }, null as string | null),
-          avg_mood_score: childStats.reduce((sum, child, _, arr) => {
-            return sum + (child.avg_mood_score || 0) / arr.length;
-          }, 0),
-          active_categories: 0, // Se calculará por separado
-          pending_reviews: 0,   // Se calculará por separado
-          follow_ups_due: 0     // Se calculará por separado
-        };
+      // Obtener estadísticas usando queries SQL directas
+      const [
+        childrenCount,
+        logsCount,
+        weeklyLogs,
+        monthlyLogs,
+        categoriesCount,
+        pendingReviews,
+        followUps
+      ] = await Promise.all([
+        // Total niños accesibles - simplemente contar los IDs
+        Promise.resolve({ count: accessibleChildrenIds.length }),
 
-        // Obtener categorías activas
-        const { data: categories } = await supabase
+        // Total logs de niños accesibles
+        accessibleChildrenIds.length > 0 ? 
+          supabase
+            .from('daily_logs')
+            .select('id', { count: 'exact', head: true })
+            .in('child_id', accessibleChildrenIds)
+            .eq('is_deleted', false) :
+          Promise.resolve({ count: 0 }),
+
+        // Logs esta semana
+        accessibleChildrenIds.length > 0 ?
+          supabase
+            .from('daily_logs')
+            .select('id', { count: 'exact', head: true })
+            .in('child_id', accessibleChildrenIds)
+            .eq('is_deleted', false)
+            .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()) :
+          Promise.resolve({ count: 0 }),
+
+        // Logs este mes
+        accessibleChildrenIds.length > 0 ?
+          supabase
+            .from('daily_logs')
+            .select('id', { count: 'exact', head: true })
+            .in('child_id', accessibleChildrenIds)
+            .eq('is_deleted', false)
+            .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()) :
+          Promise.resolve({ count: 0 }),
+
+        // Categorías activas
+        supabase
           .from('categories')
-          .select('id')
-          .eq('is_active', true);
-        
-        stats.active_categories = categories?.length || 0;
+          .select('id', { count: 'exact', head: true })
+          .eq('is_active', true),
 
-        // Obtener reviews pendientes
-        const { data: pendingReviews } = await supabase
-          .from('daily_logs')
-          .select('id')
-          .is('reviewed_by', null)
-          .eq('is_deleted', false);
-        
-        stats.pending_reviews = pendingReviews?.length || 0;
+        // Logs pendientes de revisión
+        accessibleChildrenIds.length > 0 ?
+          supabase
+            .from('daily_logs')
+            .select('id', { count: 'exact', head: true })
+            .in('child_id', accessibleChildrenIds)
+            .eq('is_deleted', false)
+            .is('reviewed_by', null) :
+          Promise.resolve({ count: 0 }),
 
-        // Obtener follow-ups pendientes
-        const { data: followUps } = await supabase
-          .from('daily_logs')
-          .select('id')
-          .eq('follow_up_required', true)
-          .lte('follow_up_date', new Date().toISOString().split('T')[0])
-          .eq('is_deleted', false);
-        
-        stats.follow_ups_due = followUps?.length || 0;
+        // Follow-ups vencidos
+        accessibleChildrenIds.length > 0 ?
+          supabase
+            .from('daily_logs')
+            .select('id', { count: 'exact', head: true })
+            .in('child_id', accessibleChildrenIds)
+            .eq('is_deleted', false)
+            .eq('follow_up_required', true)
+            .lte('follow_up_date', new Date().toISOString().split('T')[0]) :
+          Promise.resolve({ count: 0 })
+      ]);
 
-        setStats(stats);
-      }
+      const newStats: DashboardStats = {
+        total_children: childrenCount.count || 0,
+        total_logs: logsCount.count || 0,
+        logs_this_week: weeklyLogs.count || 0,
+        logs_this_month: monthlyLogs.count || 0,
+        active_categories: categoriesCount.count || 0,
+        pending_reviews: pendingReviews.count || 0,
+        follow_ups_due: followUps.count || 0
+      };
+
+      console.log('✅ Stats fetched successfully:', newStats);
+      setStats(newStats);
 
     } catch (err) {
-      console.warn('Warning: Could not fetch stats:', err);
+      console.error('❌ Error fetching stats:', err);
     }
-  }, [user]);
+  }, [user, supabase, getAccessibleChildrenIds]);
 
   /**
    * Crear nuevo log
@@ -292,21 +318,18 @@ export function useLogs(options: UseLogsOptions = {}): UseLogsReturn {
 
       console.log('📝 Creating new log:', logData.title);
 
-      // Verificar permisos
-      const canEdit = await userCanEditChild(logData.child_id);
-      if (!canEdit) {
-        throw new Error('No tienes permisos para crear logs para este niño');
+      // Verificar permisos de acceso al niño
+      const canAccess = await userCanAccessChild(logData.child_id, user.id);
+      if (!canAccess) {
+        throw new Error('No tienes permisos para crear registros para este niño');
       }
-
-      const dataToInsert = {
-        ...logData,
-        logged_by: user.id,
-        log_date: logData.log_date || new Date().toISOString().split('T')[0]
-      };
 
       const { data, error } = await supabase
         .from('daily_logs')
-        .insert(dataToInsert)
+        .insert({
+          ...logData,
+          logged_by: user.id
+        })
         .select()
         .single();
 
@@ -315,27 +338,34 @@ export function useLogs(options: UseLogsOptions = {}): UseLogsReturn {
         throw error;
       }
 
-      console.log('✅ Log created successfully:', data);
+      console.log('✅ Log created successfully:', data.id);
 
       // Refrescar logs y stats
       await Promise.all([
-        fetchLogs(),
+        fetchLogs(0, false),
         fetchStats()
       ]);
 
-      return data as DailyLog;
+      // Auditoría
+      await auditSensitiveAccess(
+        'CREATE_LOG',
+        data.id,
+        `Created log: ${data.title}`
+      );
+
+      return data;
     } catch (err) {
       console.error('❌ Error in createLog:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Error creating log';
+      const errorMessage = err instanceof Error ? err.message : 'Error al crear el registro';
       setError(errorMessage);
       throw new Error(errorMessage);
     } finally {
       setLoading(false);
     }
-  }, [user, fetchLogs, fetchStats]);
+  }, [user, fetchLogs, fetchStats, supabase]);
 
   /**
-   * Actualizar log existente
+   * Actualizar log
    */
   const updateLog = useCallback(async (id: string, updates: LogUpdate): Promise<DailyLog> => {
     if (!user) {
@@ -363,21 +393,28 @@ export function useLogs(options: UseLogsOptions = {}): UseLogsReturn {
         throw error;
       }
 
-      console.log('✅ Log updated successfully:', data);
+      console.log('✅ Log updated successfully:', data.id);
 
       // Refrescar logs
-      await fetchLogs();
+      await fetchLogs(0, false);
 
-      return data as DailyLog;
+      // Auditoría
+      await auditSensitiveAccess(
+        'UPDATE_LOG',
+        data.id,
+        `Updated log: ${data.title}`
+      );
+
+      return data;
     } catch (err) {
       console.error('❌ Error in updateLog:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Error updating log';
+      const errorMessage = err instanceof Error ? err.message : 'Error al actualizar el registro';
       setError(errorMessage);
       throw new Error(errorMessage);
     } finally {
       setLoading(false);
     }
-  }, [user, fetchLogs]);
+  }, [user, fetchLogs, supabase]);
 
   /**
    * Eliminar log (soft delete)
@@ -391,11 +428,11 @@ export function useLogs(options: UseLogsOptions = {}): UseLogsReturn {
       setLoading(true);
       setError(null);
 
-      console.log('🗑️ Soft deleting log:', id);
+      console.log('🗑️ Deleting log:', id);
 
       const { error } = await supabase
         .from('daily_logs')
-        .update({ 
+        .update({
           is_deleted: true,
           updated_at: new Date().toISOString()
         })
@@ -406,29 +443,37 @@ export function useLogs(options: UseLogsOptions = {}): UseLogsReturn {
         throw error;
       }
 
-      console.log('✅ Log deleted successfully');
+      console.log('✅ Log deleted successfully:', id);
 
       // Refrescar logs y stats
       await Promise.all([
-        fetchLogs(),
+        fetchLogs(0, false),
         fetchStats()
       ]);
+
+      // Auditoría
+      await auditSensitiveAccess(
+        'DELETE_LOG',
+        id,
+        'Log marked as deleted'
+      );
+
     } catch (err) {
       console.error('❌ Error in deleteLog:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Error deleting log';
+      const errorMessage = err instanceof Error ? err.message : 'Error al eliminar el registro';
       setError(errorMessage);
       throw new Error(errorMessage);
     } finally {
       setLoading(false);
     }
-  }, [user, fetchLogs, fetchStats]);
+  }, [user, fetchLogs, fetchStats, supabase]);
 
   /**
-   * Marcar log como revisado (especialistas)
+   * Marcar log como revisado
    */
   const markAsReviewed = useCallback(async (id: string, specialistNotes?: string): Promise<void> => {
     if (!user || user.role !== 'specialist') {
-      throw new Error('Solo especialistas pueden revisar logs');
+      throw new Error('Solo los especialistas pueden revisar registros');
     }
 
     try {
@@ -442,13 +487,13 @@ export function useLogs(options: UseLogsOptions = {}): UseLogsReturn {
         .update({
           reviewed_by: user.id,
           reviewed_at: new Date().toISOString(),
-          specialist_notes: specialistNotes || null,
+          specialist_notes: specialistNotes,
           updated_at: new Date().toISOString()
         })
         .eq('id', id);
 
       if (error) {
-        console.error('❌ Error marking log as reviewed:', error);
+        console.error('❌ Error marking as reviewed:', error);
         throw error;
       }
 
@@ -456,18 +501,19 @@ export function useLogs(options: UseLogsOptions = {}): UseLogsReturn {
 
       // Refrescar logs y stats
       await Promise.all([
-        fetchLogs(),
+        fetchLogs(0, false),
         fetchStats()
       ]);
+
     } catch (err) {
       console.error('❌ Error in markAsReviewed:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Error marking log as reviewed';
+      const errorMessage = err instanceof Error ? err.message : 'Error al marcar como revisado';
       setError(errorMessage);
       throw new Error(errorMessage);
     } finally {
       setLoading(false);
     }
-  }, [user, fetchLogs, fetchStats]);
+  }, [user, fetchLogs, fetchStats, supabase]);
 
   /**
    * Agregar feedback de padres
@@ -492,23 +538,24 @@ export function useLogs(options: UseLogsOptions = {}): UseLogsReturn {
         .eq('id', id);
 
       if (error) {
-        console.error('❌ Error adding parent feedback:', error);
+        console.error('❌ Error adding feedback:', error);
         throw error;
       }
 
       console.log('✅ Parent feedback added successfully');
 
       // Refrescar logs
-      await fetchLogs();
+      await fetchLogs(0, false);
+
     } catch (err) {
       console.error('❌ Error in addParentFeedback:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Error adding parent feedback';
+      const errorMessage = err instanceof Error ? err.message : 'Error al agregar comentario';
       setError(errorMessage);
       throw new Error(errorMessage);
     } finally {
       setLoading(false);
     }
-  }, [user, fetchLogs]);
+  }, [user, fetchLogs, supabase]);
 
   /**
    * Toggle privacidad del log
@@ -551,16 +598,16 @@ export function useLogs(options: UseLogsOptions = {}): UseLogsReturn {
       console.log('✅ Log privacy toggled successfully');
 
       // Refrescar logs
-      await fetchLogs();
+      await fetchLogs(0, false);
     } catch (err) {
       console.error('❌ Error in togglePrivacy:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Error toggling privacy';
+      const errorMessage = err instanceof Error ? err.message : 'Error al cambiar privacidad';
       setError(errorMessage);
       throw new Error(errorMessage);
     } finally {
       setLoading(false);
     }
-  }, [user, fetchLogs]);
+  }, [user, fetchLogs, supabase]);
 
   /**
    * Cargar más logs (paginación)
@@ -599,51 +646,19 @@ export function useLogs(options: UseLogsOptions = {}): UseLogsReturn {
       if (filters.date_from && log.log_date < filters.date_from) return false;
       if (filters.date_to && log.log_date > filters.date_to) return false;
 
-      // Filtro por mood score
-      if (filters.mood_score_min && (!log.mood_score || log.mood_score < filters.mood_score_min)) return false;
-      if (filters.mood_score_max && (!log.mood_score || log.mood_score > filters.mood_score_max)) return false;
-
       // Filtro por intensidad
       if (filters.intensity_level && log.intensity_level !== filters.intensity_level) return false;
 
-      // Filtro por privacidad
-      if (filters.is_private !== undefined && log.is_private !== filters.is_private) return false;
+      // Filtro por estado de ánimo
+      if (filters.mood_score && log.mood_score !== filters.mood_score) return false;
 
-      // Filtro por adjuntos
-      if (filters.has_attachments !== undefined) {
-        const hasAttachments = log.attachments.length > 0;
-        if (hasAttachments !== filters.has_attachments) return false;
-      }
-
-      // Filtro por tags
-      if (filters.tags && filters.tags.length > 0) {
-        const hasTag = filters.tags.some(tag => log.tags.includes(tag));
-        if (!hasTag) return false;
-      }
-
-      // Filtro por término de búsqueda
-      if (filters.search_term) {
-        const term = filters.search_term.toLowerCase();
-        if (!log.title.toLowerCase().includes(term) &&
-            !log.content.toLowerCase().includes(term) &&
-            !log.tags.some(tag => tag.toLowerCase().includes(term))) {
+      // Filtro por búsqueda de texto
+      if (filters.search) {
+        const searchLower = filters.search.toLowerCase();
+        if (!log.title.toLowerCase().includes(searchLower) &&
+            !log.content.toLowerCase().includes(searchLower)) {
           return false;
         }
-      }
-
-      // Filtro por autor
-      if (filters.logged_by && log.logged_by !== filters.logged_by) return false;
-
-      // Filtro por estado de revisión
-      if (filters.reviewed_status) {
-        if (filters.reviewed_status === 'reviewed' && !log.reviewed_by) return false;
-        if (filters.reviewed_status === 'pending' && log.reviewed_by) return false;
-      }
-
-      // Filtro por follow-up
-      if (filters.follow_up_status) {
-        if (filters.follow_up_status === 'required' && !log.follow_up_required) return false;
-        if (filters.follow_up_status === 'completed' && log.follow_up_required) return false;
       }
 
       return true;
@@ -654,10 +669,53 @@ export function useLogs(options: UseLogsOptions = {}): UseLogsReturn {
    * Exportar logs
    */
   const exportLogs = useCallback(async (format: 'csv' | 'pdf', filters?: LogFilters): Promise<void> => {
-    // TODO: Implementar exportación
-    console.log('📄 Exporting logs:', { format, filters });
-    throw new Error('Export functionality not implemented yet');
-  }, []);
+    try {
+      console.log(`📄 Exporting logs as ${format.toUpperCase()}...`);
+
+      const logsToExport = filters ? filterLogs(filters) : logs;
+
+      if (format === 'csv') {
+        // Implementar exportación CSV
+        const csvContent = [
+          // Header
+          ['Fecha', 'Niño', 'Categoría', 'Título', 'Contenido', 'Estado de Ánimo', 'Intensidad'].join(','),
+          // Data rows
+          ...logsToExport.map(log => [
+            log.log_date,
+            log.child?.name || '',
+            log.category?.name || '',
+            `"${log.title}"`,
+            `"${log.content.replace(/"/g, '""')}"`,
+            log.mood_score || '',
+            log.intensity_level
+          ].join(','))
+        ].join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `neurolog-registros-${new Date().toISOString().split('T')[0]}.csv`;
+        link.click();
+      } else {
+        // TODO: Implementar exportación PDF con jsPDF
+        console.log('PDF export not implemented yet');
+        throw new Error('Exportación PDF próximamente disponible');
+      }
+
+      // Auditoría
+      await auditSensitiveAccess(
+        'EXPORT_LOGS',
+        user?.id || '',
+        `Exported ${logsToExport.length} logs as ${format.toUpperCase()}`
+      );
+
+    } catch (err) {
+      console.error('❌ Error exporting logs:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Error al exportar';
+      setError(errorMessage);
+      throw new Error(errorMessage);
+    }
+  }, [logs, filterLogs, user]);
 
   /**
    * Obtener log por ID
@@ -667,37 +725,25 @@ export function useLogs(options: UseLogsOptions = {}): UseLogsReturn {
   }, [logs]);
 
   /**
-   * Verificar si puede editar un log
+   * Verificar si el usuario puede editar un log
    */
   const canEditLog = useCallback(async (logId: string): Promise<boolean> => {
-    const log = getLogById(logId);
-    if (!log || !user) return false;
-    
-    // Solo el autor puede editar en las primeras 24 horas
-    const createdAt = new Date(log.created_at);
-    const now = new Date();
-    const hoursSinceCreation = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
-    
-    return log.logged_by === user.id && hoursSinceCreation <= 24;
-  }, [getLogById, user]);
+    const log = logs.find(l => l.id === logId);
+    if (!log) return false;
+
+    return await userCanEditChild(log.child_id, user?.id);
+  }, [logs, user]);
 
   // ================================================================
-  // EFECTOS
+  // EFFECTS
   // ================================================================
 
-  // Cargar logs cuando cambie el usuario o filtros
   useEffect(() => {
-    if (user) {
-      setCurrentPage(0);
-      Promise.all([
-        fetchLogs(0, false),
-        fetchStats()
-      ]);
-    } else {
-      setLogs([]);
-      setLoading(false);
-    }
-  }, [user, childId, fetchLogs, fetchStats]);
+    Promise.all([
+      fetchLogs(0, false),
+      fetchStats()
+    ]);
+  }, [fetchLogs, fetchStats]);
 
   // Configurar realtime si está habilitado
   useEffect(() => {
@@ -705,29 +751,23 @@ export function useLogs(options: UseLogsOptions = {}): UseLogsReturn {
 
     console.log('🔄 Setting up realtime subscription for logs');
 
-    const subscription = supabase
-      .channel('logs_changes')
+    const channel = supabase
+      .channel('logs-changes')
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
         table: 'daily_logs'
       }, (payload) => {
         console.log('🔄 Logs realtime update:', payload);
-        if (autoRefresh) {
-          refreshLogs();
-        }
+        refreshLogs();
       })
       .subscribe();
 
     return () => {
       console.log('🔄 Cleaning up logs realtime subscription');
-      subscription.unsubscribe();
+      supabase.removeChannel(channel);
     };
-  }, [realtime, user, autoRefresh, refreshLogs]);
-
-  // ================================================================
-  // RETURN
-  // ================================================================
+  }, [realtime, user, refreshLogs, supabase]);
 
   return {
     logs,
@@ -746,6 +786,6 @@ export function useLogs(options: UseLogsOptions = {}): UseLogsReturn {
     filterLogs,
     exportLogs,
     getLogById,
-    canEditLog,
+    canEditLog
   };
 }

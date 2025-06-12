@@ -1,7 +1,5 @@
-// ================================================================
-// src/components/layout/Sidebar.tsx
+// src/components/layout/sidebar.tsx
 // Sidebar actualizado con navegación mejorada
-// ================================================================
 
 'use client';
 
@@ -45,13 +43,15 @@ export function Sidebar() {
   const [notifications, setNotifications] = useState(0);
   const pathname = usePathname();
   const { user, signOut, isAdmin } = useAuth();
-  const { stats } = useLogs({ pageSize: 1 }); // Solo para obtener stats
+  const { stats, loading: statsLoading } = useLogs({ pageSize: 1 });
 
   // Calcular notificaciones
   useEffect(() => {
-    const totalNotifications = (stats.pending_reviews || 0) + (stats.follow_ups_due || 0);
-    setNotifications(totalNotifications);
-  }, [stats]);
+    if (!statsLoading) {
+      const totalNotifications = (stats.pending_reviews || 0) + (stats.follow_ups_due || 0);
+      setNotifications(totalNotifications);
+    }
+  }, [stats, statsLoading]);
 
   const navigation: NavigationItem[] = [
     { 
@@ -70,7 +70,7 @@ export function Sidebar() {
       name: 'Registros', 
       href: '/dashboard/logs', 
       icon: BookOpen,
-      badge: notifications,
+      badge: notifications > 0 ? notifications : undefined,
       description: 'Registros diarios y observaciones'
     },
     { 
@@ -148,97 +148,100 @@ export function Sidebar() {
         'fixed inset-y-0 left-0 z-40 w-72 bg-white shadow-xl transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0 flex flex-col',
         isOpen ? 'translate-x-0' : '-translate-x-full'
       )}>
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-lg">NL</span>
+        {/* Close button (mobile) */}
+        <div className="flex items-center justify-between p-4 lg:hidden">
+          <div className="flex items-center space-x-2">
+            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+              <span className="text-white font-bold text-sm">NL</span>
             </div>
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">NeuroLog</h1>
-              <p className="text-xs text-gray-500">Registro NEE</p>
-            </div>
+            <span className="text-lg font-bold text-gray-900">NeuroLog</span>
           </div>
-          
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setIsOpen(false)}
-            className="lg:hidden"
           >
-            <X className="h-5 w-5" />
+            <X className="h-6 w-6" />
           </Button>
         </div>
 
-        {/* User Profile */}
-        {user && (
-          <div className="p-6 border-b bg-gray-50">
-            <div className="flex items-center space-x-3">
-              <Avatar className="h-12 w-12">
-                <AvatarImage src={user.avatar_url} alt={user.full_name} />
-                <AvatarFallback className="bg-blue-100 text-blue-600 font-semibold">
-                  {user.full_name.charAt(0).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">
-                  {user.full_name}
-                </p>
-                <p className="text-xs text-gray-600 truncate">
-                  {user.email}
-                </p>
-                <Badge variant="outline" className="text-xs mt-1">
-                  {user.role === 'parent' && 'Padre/Madre'}
-                  {user.role === 'teacher' && 'Docente'}
-                  {user.role === 'specialist' && 'Especialista'}
-                  {user.role === 'admin' && 'Administrador'}
-                </Badge>
-              </div>
-            </div>
+        {/* Logo */}
+        <div className="hidden lg:flex items-center space-x-3 p-6 border-b border-gray-200">
+          <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+            <span className="text-white font-bold text-lg">NL</span>
           </div>
-        )}
+          <div>
+            <h1 className="text-xl font-bold text-gray-900">NeuroLog</h1>
+            <p className="text-xs text-gray-500">Seguimiento NEE</p>
+          </div>
+        </div>
+
+        {/* User Info */}
+        <div className="p-6 border-b border-gray-200">
+          <div className="flex items-center space-x-3">
+            <Avatar className="h-10 w-10">
+              <AvatarImage src={user?.avatar_url} alt={user?.full_name} />
+              <AvatarFallback className="bg-blue-100 text-blue-600">
+                {user?.full_name?.charAt(0)?.toUpperCase() || 'U'}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-gray-900 truncate">
+                {user?.full_name || 'Usuario'}
+              </p>
+              <p className="text-xs text-gray-500 capitalize">
+                {user?.role === 'parent' ? 'Padre/Madre' :
+                 user?.role === 'teacher' ? 'Docente' :
+                 user?.role === 'specialist' ? 'Especialista' : 
+                 user?.role === 'admin' ? 'Administrador' : 'Usuario'}
+              </p>
+            </div>
+            {isAdmin && (
+              <Badge variant="secondary" className="text-xs">
+                Admin
+              </Badge>
+            )}
+          </div>
+        </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
+        <nav className="flex-1 px-4 py-6 space-y-2">
           {navigation.map((item) => {
-            // Ocultar elementos de admin si no es admin
+            const isActive = isActiveLink(item.href);
+            
+            // Filtrar elementos solo para admin
             if (item.adminOnly && !isAdmin) {
               return null;
             }
 
-            const isActive = isActiveLink(item.href);
-            
             return (
               <Link
                 key={item.name}
                 href={item.href}
+                className="group"
                 onClick={() => setIsOpen(false)}
-                className={cn(
-                  'group flex items-center px-3 py-3 text-sm font-medium rounded-lg transition-colors hover:bg-gray-100',
-                  isActive 
-                    ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-700' 
-                    : 'text-gray-700 hover:text-gray-900'
-                )}
               >
-                <item.icon 
-                  className={cn(
-                    'mr-3 h-5 w-5 flex-shrink-0',
-                    isActive ? 'text-blue-700' : 'text-gray-400 group-hover:text-gray-500'
-                  )} 
-                />
-                <div className="flex-1">
-                  <div className="flex items-center justify-between">
+                <div className={cn(
+                  'flex items-center justify-between px-3 py-2 text-sm font-medium rounded-lg group-hover:bg-gray-50 transition-colors',
+                  isActive
+                    ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-600'
+                    : 'text-gray-600 hover:text-gray-900'
+                )}>
+                  <div className="flex items-center">
+                    <item.icon className={cn(
+                      'mr-3 h-5 w-5 flex-shrink-0',
+                      isActive ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-600'
+                    )} />
                     <span>{item.name}</span>
-                    {item.badge && item.badge > 0 && (
-                      <Badge variant="destructive" className="text-xs">
-                        {item.badge > 99 ? '99+' : item.badge}
-                      </Badge>
-                    )}
                   </div>
-                  {item.description && (
-                    <p className="text-xs text-gray-500 mt-1">
-                      {item.description}
-                    </p>
+                  
+                  {item.badge && item.badge > 0 && (
+                    <Badge 
+                      variant="destructive" 
+                      className="h-5 w-5 text-xs p-0 flex items-center justify-center"
+                    >
+                      {item.badge > 9 ? '9+' : item.badge}
+                    </Badge>
                   )}
                 </div>
               </Link>
@@ -246,56 +249,16 @@ export function Sidebar() {
           })}
         </nav>
 
-        {/* Quick Actions */}
-        <div className="p-4 border-t bg-gray-50">
-          <div className="space-y-2">
-            <Button 
-              asChild 
-              className="w-full justify-start" 
-              size="sm"
-            >
-              <Link href="/dashboard/logs/new">
-                <BookOpen className="mr-2 h-4 w-4" />
-                Nuevo Registro
-              </Link>
-            </Button>
-            
-            <div className="flex space-x-2">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="flex-1"
-                asChild
-              >
-                <Link href="/dashboard/help">
-                  <HelpCircle className="mr-2 h-4 w-4" />
-                  Ayuda
-                </Link>
-              </Button>
-              
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={handleSignOut}
-                className="flex-1"
-              >
-                <LogOut className="mr-2 h-4 w-4" />
-                Salir
-              </Button>
-            </div>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="p-4 border-t">
-          <div className="text-center">
-            <p className="text-xs text-gray-500">
-              NeuroLog v2.0
-            </p>
-            <p className="text-xs text-gray-400">
-              © 2025 - Proyecto Académico
-            </p>
-          </div>
+        {/* Sign Out Button */}
+        <div className="p-4 border-t border-gray-200">
+          <Button
+            variant="ghost"
+            onClick={handleSignOut}
+            className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50"
+          >
+            <LogOut className="mr-3 h-5 w-5" />
+            Cerrar Sesión
+          </Button>
         </div>
       </div>
     </>
