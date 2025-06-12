@@ -25,6 +25,7 @@ import { ProgressChart } from '@/components/reports/ProgressChart';
 import { CategoryDistribution } from '@/components/reports/CategoryDistribution';
 import { MoodTrendChart } from '@/components/reports/MoodTrendChart';
 import { ExportReportDialog } from '@/components/reports/ExportReportDialog';
+// ✅ ARREGLO: Importar todos los componentes desde TimePatterns.tsx
 import { TimePatterns, CorrelationAnalysis, AdvancedInsights } from '@/components/reports/TimePatterns';
 import type { DateRange } from 'react-day-picker';
 import { 
@@ -99,59 +100,58 @@ export default function ReportsPage() {
     return true;
   });
 
-  // Métricas calculadas
+  // Calcular métricas
   const metrics = {
     totalLogs: filteredLogs.length,
-    avgMoodScore: filteredLogs
-      .filter(log => log.mood_score)
-      .reduce((sum, log) => sum + (log.mood_score || 0), 0) / 
-      filteredLogs.filter(log => log.mood_score).length || 0,
-    categoriesUsed: new Set(filteredLogs.map(log => log.category_id)).size,
-    followUpsCompleted: filteredLogs.filter(log => 
-      log.follow_up_required && log.follow_up_date && new Date(log.follow_up_date) <= new Date()
-    ).length,
-    pendingReviews: filteredLogs.filter(log => !log.reviewed_by).length,
-    improvementTrend: calculateImprovementTrend(filteredLogs)
+    averageMood: filteredLogs.filter(l => l.mood_score).length > 0 
+      ? (filteredLogs.filter(l => l.mood_score).reduce((sum, l) => sum + l.mood_score, 0) / filteredLogs.filter(l => l.mood_score).length)
+      : 0,
+    improvementTrend: calculateImprovementTrend(filteredLogs),
+    activeCategories: new Set(filteredLogs.map(l => l.category_name).filter(Boolean)).size,
+    followUpsRequired: filteredLogs.filter(l => l.follow_up_required).length,
+    activeDays: new Set(filteredLogs.map(l => new Date(l.created_at).toDateString())).size
   };
+
+  if (childrenLoading || logsLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Reportes y Análisis</h1>
-          <p className="text-gray-600">
-            Análisis detallado del progreso y patrones de desarrollo
+          <h1 className="text-3xl font-bold text-gray-900">Reportes y Análisis</h1>
+          <p className="mt-2 text-gray-600">
+            Análisis detallado del progreso y patrones de comportamiento
           </p>
         </div>
-        
-        <div className="flex items-center space-x-3">
-          <Button variant="outline" onClick={() => setIsExportDialogOpen(true)}>
-            <Download className="h-4 w-4 mr-2" />
-            Exportar
-          </Button>
-          <Button>
-            <FileText className="h-4 w-4 mr-2" />
-            Generar Reporte
-          </Button>
-        </div>
+        <Button onClick={() => setIsExportDialogOpen(true)}>
+          <Download className="h-4 w-4 mr-2" />
+          Exportar Reporte
+        </Button>
       </div>
 
       {/* Filters */}
       <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-col md:flex-row md:items-center space-y-4 md:space-y-0 md:space-x-4">
-            <div className="flex-1">
-              <label className="text-sm font-medium text-gray-700 mb-2 block">
-                Niño
-              </label>
+        <CardHeader>
+          <CardTitle>Filtros</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="text-sm font-medium mb-2 block">Niño</label>
               <Select value={selectedChild} onValueChange={setSelectedChild}>
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Seleccionar niño" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos los niños</SelectItem>
-                  {children.map((child) => (
+                  {children.map(child => (
                     <SelectItem key={child.id} value={child.id}>
                       {child.name}
                     </SelectItem>
@@ -159,168 +159,139 @@ export default function ReportsPage() {
                 </SelectContent>
               </Select>
             </div>
+            
+            <div>
+              <label className="text-sm font-medium mb-2 block">Período</label>
+              <DatePickerWithRange 
+                date={dateRange}
+                onDateChange={setDateRange}
+              />
+            </div>
 
-            <div className="flex-1">
-              <label className="text-sm font-medium text-gray-700 mb-2 block">
-                Período
-              </label>
-              <DatePickerWithRange date={dateRange} setDate={setDateRange} />
+            <div className="flex items-end">
+              <Button 
+                variant="outline"
+                onClick={() => {
+                  setSelectedChild('all');
+                  setDateRange({
+                    from: subMonths(new Date(), 3),
+                    to: new Date()
+                  });
+                }}
+              >
+                Limpiar Filtros
+              </Button>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Key Metrics */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {/* Métricas principales */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         <MetricCard
-          title="Total de Registros"
+          title="Total Registros"
           value={metrics.totalLogs}
-          icon={Activity}
+          icon={FileText}
           color="blue"
-          subtitle="registros analizados"
+          subtitle="En el período seleccionado"
         />
+        
         <MetricCard
           title="Estado de Ánimo"
-          value={`${metrics.avgMoodScore.toFixed(1)}/5`}
+          value={metrics.averageMood.toFixed(1)}
+          suffix="/5"
           icon={Heart}
-          color="purple"
-          subtitle="promedio general"
+          color={metrics.averageMood >= 4 ? 'green' : metrics.averageMood >= 3 ? 'orange' : 'red'}
+          subtitle="Promedio del período"
         />
-        <MetricCard
-          title="Categorías Activas"
-          value={metrics.categoriesUsed}
-          icon={Target}
-          color="green"
-          subtitle="áreas de seguimiento"
-        />
+        
         <MetricCard
           title="Tendencia"
-          value={`${metrics.improvementTrend > 0 ? '+' : ''}${metrics.improvementTrend.toFixed(1)}`}
-          suffix={metrics.improvementTrend > 0 ? '↗' : metrics.improvementTrend < 0 ? '↘' : '→'}
-          icon={TrendingUp}
+          value={metrics.improvementTrend > 0 ? '+' : ''}
+          icon={metrics.improvementTrend > 0 ? TrendingUp : metrics.improvementTrend < 0 ? TrendingUp : Target}
           color={metrics.improvementTrend > 0 ? 'green' : metrics.improvementTrend < 0 ? 'red' : 'gray'}
-          subtitle={metrics.improvementTrend > 0 ? 'Mejorando' : metrics.improvementTrend < 0 ? 'Declinando' : 'Estable'}
+          subtitle={metrics.improvementTrend > 0 ? 'Mejorando' : metrics.improvementTrend < 0 ? 'Necesita atención' : 'Estable'}
+        />
+        
+        <MetricCard
+          title="Categorías"
+          value={metrics.activeCategories}
+          icon={PieChart}
+          color="purple"
+          subtitle="Diferentes áreas"
+        />
+        
+        <MetricCard
+          title="Seguimientos"
+          value={metrics.followUpsRequired}
+          icon={AlertTriangle}
+          color={metrics.followUpsRequired > 0 ? 'orange' : 'green'}
+          subtitle="Pendientes"
+        />
+        
+        <MetricCard
+          title="Días Activos"
+          value={metrics.activeDays}
+          icon={Calendar}
+          color="blue"
+          subtitle="Con registros"
         />
       </div>
 
-      {/* Main Content */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+      {/* Tabs de análisis */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="overview">Resumen</TabsTrigger>
-          <TabsTrigger value="progress">Progreso</TabsTrigger>
+          <TabsTrigger value="trends">Tendencias</TabsTrigger>
           <TabsTrigger value="patterns">Patrones</TabsTrigger>
           <TabsTrigger value="insights">Insights</TabsTrigger>
         </TabsList>
 
-        {/* Tab: Overview */}
+        {/* Tab: Resumen */}
         <TabsContent value="overview" className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Category Distribution */}
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center">
-                  <PieChart className="h-5 w-5 mr-2" />
-                  Distribución por Categorías
-                </CardTitle>
+                <CardTitle>Progreso General</CardTitle>
                 <CardDescription>
-                  Frecuencia de registros por tipo de actividad
+                  Evolución del estado de ánimo en el tiempo
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ProgressChart data={filteredLogs} />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Distribución por Categorías</CardTitle>
+                <CardDescription>
+                  Frecuencia de registros por área
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <CategoryDistribution data={filteredLogs} />
               </CardContent>
             </Card>
-
-            {/* Mood Trend */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <LineChart className="h-5 w-5 mr-2" />
-                  Tendencia del Estado de Ánimo
-                </CardTitle>
-                <CardDescription>
-                  Evolución del bienestar emocional
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <MoodTrendChart data={filteredLogs} />
-              </CardContent>
-            </Card>
           </div>
+        </TabsContent>
 
-          {/* Recent Insights */}
+        {/* Tab: Tendencias */}
+        <TabsContent value="trends" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Resumen de Actividad</CardTitle>
+              <CardTitle>Tendencias del Estado de Ánimo</CardTitle>
               <CardDescription>
-                Estadísticas generales del período seleccionado
+                Análisis temporal del bienestar emocional
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-blue-600">{metrics.totalLogs}</p>
-                  <p className="text-sm text-gray-600">Registros totales</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-green-600">{metrics.followUpsCompleted}</p>
-                  <p className="text-sm text-gray-600">Seguimientos completados</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-orange-600">{metrics.pendingReviews}</p>
-                  <p className="text-sm text-gray-600">Pendientes de revisión</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-purple-600">{metrics.categoriesUsed}</p>
-                  <p className="text-sm text-gray-600">Categorías utilizadas</p>
-                </div>
-              </div>
+              <MoodTrendChart data={filteredLogs} />
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* Tab: Progress */}
-        <TabsContent value="progress" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Progreso del Estado de Ánimo</CardTitle>
-                <CardDescription>
-                  Evolución del bienestar emocional en el tiempo
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ProgressChart data={filteredLogs} metric="mood_score" />
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Frecuencia de Registros</CardTitle>
-                <CardDescription>
-                  Consistencia en el seguimiento diario
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ProgressChart data={filteredLogs} metric="frequency" />
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Intensidad Promedio</CardTitle>
-              <CardDescription>
-                Nivel de intensidad de los eventos registrados
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ProgressChart data={filteredLogs} metric="intensity" timeframe="quarter" />
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Tab: Patterns */}
+        {/* Tab: Patrones */}
         <TabsContent value="patterns" className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card>

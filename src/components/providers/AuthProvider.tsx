@@ -1,5 +1,5 @@
 // src/components/providers/AuthProvider.tsx
-// AuthProvider COMPLETO CORREGIDO - Sin loops infinitos + signUp arreglado
+// AuthProvider CORREGIDO - Soluciona el problema del nombre que se oculta
 
 'use client';
 
@@ -37,7 +37,7 @@ interface AuthProviderProps {
 }
 
 // ================================================================
-// AUTH PROVIDER COMPONENT - VERSIÓN COMPLETA CORREGIDA
+// AUTH PROVIDER COMPONENT - VERSIÓN CORREGIDA
 // ================================================================
 
 export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
@@ -46,19 +46,20 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
   
-  // ✅ USAR useRef PARA MANTENER REFERENCIA ESTABLE DE SUPABASE
+  // ✅ USAR useRef PARA MANTENER REFERENCIA ESTABLE
   const supabaseRef = useRef(createClient());
   const supabase = supabaseRef.current;
   
-  // ✅ USAR useRef PARA EVITAR MÚLTIPLES INICIALIZACIONES
+  // ✅ REF PARA EVITAR MÚLTIPLES INICIALIZACIONES
   const initializedRef = useRef(false);
+  const mountedRef = useRef(true);
 
   // ================================================================
-  // FUNCIONES HELPER ESTABILIZADAS
+  // FUNCIONES HELPER ESTABILIZADAS CON useCallback
   // ================================================================
 
   /**
-   * ✅ FETCH PROFILE ESTABILIZADO CON FALLBACK MEJORADO
+   * ✅ FETCH PROFILE - MEJORADO CON FALLBACK
    */
   const fetchProfile = useCallback(async (userId: string): Promise<Profile | null> => {
     try {
@@ -73,11 +74,10 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
       if (error) {
         console.error('❌ Error fetching profile:', error);
         
-        // ✅ ARREGLO: Si no existe el perfil, intentar crearlo desde auth.users
+        // ✅ ARREGLO: Si no existe el perfil, intentar crearlo
         if (error.code === 'PGRST116') { // No rows found
           console.log('ℹ️ Profile not found, attempting to create...');
           
-          // Obtener datos del usuario de auth
           const { data: authUser, error: authError } = await supabase.auth.getUser();
           
           if (authUser?.user && !authError) {
@@ -86,7 +86,6 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
                             userData.email?.split('@')[0] || 
                             'Usuario';
             
-            // Crear el perfil
             const { data: newProfile, error: createError } = await supabase
               .from('profiles')
               .insert({
@@ -105,12 +104,12 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
               return null;
             }
             
-            console.log('✅ Profile created from auth data:', newProfile);
+            console.log('✅ Profile created successfully:', newProfile);
             return newProfile as Profile;
           }
         }
         
-        throw error;
+        return null;
       }
 
       if (!data) {
@@ -127,19 +126,22 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
   }, [supabase]);
 
   /**
-   * ✅ CHECK ADMIN STATUS ESTABILIZADO
+   * ✅ CHECK ADMIN STATUS
    */
   const checkAdminStatus = useCallback(async (userId: string): Promise<boolean> => {
     try {
       const { data, error } = await supabase
-        .rpc('is_admin', { user_id: userId });
-      
+        .from('profiles')
+        .select('role')
+        .eq('id', userId)
+        .single();
+
       if (error) {
         console.error('❌ Error checking admin status:', error);
         return false;
       }
-      
-      return data === true;
+
+      return data?.role === 'admin';
     } catch (err) {
       console.error('❌ Error in checkAdminStatus:', err);
       return false;
@@ -147,7 +149,7 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
   }, [supabase]);
 
   /**
-   * ✅ UPDATE LAST LOGIN ESTABILIZADO
+   * ✅ UPDATE LAST LOGIN
    */
   const updateLastLogin = useCallback(async (userId: string): Promise<void> => {
     try {
@@ -155,18 +157,16 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
         .from('profiles')
         .update({ 
           last_login: new Date().toISOString(),
-          failed_login_attempts: 0,
-          last_failed_login: null,
-          account_locked_until: null
+          updated_at: new Date().toISOString()
         })
         .eq('id', userId);
     } catch (err) {
-      console.warn('Warning: Could not update last login:', err);
+      console.error('❌ Error updating last login:', err);
     }
   }, [supabase]);
 
   // ================================================================
-  // FUNCIONES PÚBLICAS DEL CONTEXTO ESTABILIZADAS
+  // FUNCIONES DE AUTENTICACIÓN
   // ================================================================
 
   /**
@@ -177,28 +177,17 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
       setLoading(true);
       setError(null);
 
-      console.log('🔑 Attempting sign in for:', email);
+      console.log('🔐 Attempting sign in for:', email);
 
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
-      if (error) {
-        // Manejar errores de login fallidos
-        try {
-          await supabase.rpc('handle_failed_login', { user_email: email });
-        } catch {
-          // Ignorar errores de tracking
-        }
-        throw error;
-      }
+      if (error) throw error;
 
-      if (data.user) {
-        await updateLastLogin(data.user.id);
-        console.log('✅ Sign in successful');
-      }
-
+      console.log('✅ Sign in successful');
+      // El estado se actualizará automáticamente por el listener
     } catch (err: any) {
       console.error('❌ Error in signIn:', err);
       const errorMessage = err.message || 'Error al iniciar sesión';
@@ -207,10 +196,10 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
     } finally {
       setLoading(false);
     }
-  }, [supabase, updateLastLogin]);
+  }, [supabase]);
 
   /**
-   * ✅ SIGN UP ESTABILIZADO Y CORREGIDO
+   * ✅ SIGN UP CORREGIDO
    */
   const signUp = useCallback(async (
     email: string, 
@@ -224,13 +213,12 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
 
       console.log('📝 Attempting sign up for:', email, 'with name:', fullName);
 
-      // ✅ ARREGLO CRÍTICO: Pasar full_name correctamente en user_metadata
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: {
-            full_name: fullName,  // ✅ Esto va a raw_user_meta_data
+            full_name: fullName,
             role: role
           }
         }
@@ -238,38 +226,7 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
 
       if (error) throw error;
 
-      // ✅ ARREGLO ADICIONAL: Si el usuario se registra exitosamente, 
-      // crear/actualizar el perfil directamente
-      if (data.user && !error) {
-        console.log('✅ Sign up successful, creating profile...');
-        
-        // Intentar crear el perfil manualmente si no existe
-        try {
-          const { error: profileError } = await supabase
-            .from('profiles')
-            .upsert({
-              id: data.user.id,
-              email: email,
-              full_name: fullName,
-              role: role,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            });
-          
-          if (profileError) {
-            console.warn('⚠️ Profile creation warning:', profileError);
-            // No throw, el trigger debería manejarlo
-          } else {
-            console.log('✅ Profile created successfully');
-          }
-        } catch (profileErr) {
-          console.warn('⚠️ Manual profile creation failed:', profileErr);
-          // No throw, el trigger debería manejarlo
-        }
-      }
-
-      console.log('✅ Sign up process completed');
-
+      console.log('✅ Sign up successful');
     } catch (err: any) {
       console.error('❌ Error in signUp:', err);
       const errorMessage = err.message || 'Error al crear la cuenta';
@@ -293,9 +250,11 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
       if (error) throw error;
 
       // ✅ LIMPIAR ESTADO INMEDIATAMENTE
-      setUser(null);
-      setIsAdmin(false);
-      setError(null);
+      if (mountedRef.current) {
+        setUser(null);
+        setIsAdmin(false);
+        setError(null);
+      }
 
       console.log('✅ Sign out successful');
     } catch (err: any) {
@@ -334,7 +293,10 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
 
       if (error) throw error;
 
-      setUser(data as Profile);
+      if (mountedRef.current) {
+        setUser(data as Profile);
+      }
+      
       console.log('✅ Profile updated successfully');
     } catch (err: any) {
       console.error('❌ Error updating profile:', err);
@@ -380,22 +342,21 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
     if (!user) return;
 
     try {
-      setLoading(true);
       console.log('🔄 Refreshing user data...');
 
       const profile = await fetchProfile(user.id);
-      if (profile) {
+      if (profile && mountedRef.current) {
         setUser(profile);
         
         const adminStatus = await checkAdminStatus(user.id);
-        setIsAdmin(adminStatus);
+        if (mountedRef.current) {
+          setIsAdmin(adminStatus);
+        }
       }
 
       console.log('✅ User data refreshed');
     } catch (err: any) {
       console.error('❌ Error refreshing user:', err);
-    } finally {
-      setLoading(false);
     }
   }, [user, fetchProfile, checkAdminStatus]);
 
@@ -415,7 +376,7 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
     if (initializedRef.current) return;
     initializedRef.current = true;
 
-    let mounted = true;
+    console.log('🚀 Initializing AuthProvider...');
 
     /**
      * ✅ FUNCIÓN DE INICIALIZACIÓN MEJORADA
@@ -426,15 +387,19 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
         
         const { data: { session } } = await supabase.auth.getSession();
         
-        if (session?.user && mounted) {
+        if (session?.user && mountedRef.current) {
           console.log('✅ Session found, fetching profile...');
+          
+          // ✅ ACTUALIZAR LAST LOGIN
+          await updateLastLogin(session.user.id);
+          
           const profile = await fetchProfile(session.user.id);
           
-          if (profile && mounted) {
+          if (profile && mountedRef.current) {
             setUser(profile);
             
             const adminStatus = await checkAdminStatus(session.user.id);
-            if (mounted) {
+            if (mountedRef.current) {
               setIsAdmin(adminStatus);
             }
           }
@@ -443,11 +408,11 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
         }
       } catch (err) {
         console.error('❌ Error getting initial session:', err);
-        if (mounted) {
+        if (mountedRef.current) {
           setError('Error al cargar la sesión');
         }
       } finally {
-        if (mounted) {
+        if (mountedRef.current) {
           setLoading(false);
         }
       }
@@ -458,27 +423,29 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
      */
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        if (!mounted) return;
+        if (!mountedRef.current) return;
 
         console.log('🔄 Auth state changed:', event);
 
         try {
           if (event === 'SIGNED_IN' && session?.user) {
             console.log('✅ User signed in, fetching profile...');
+            setLoading(true);
+            
             await updateLastLogin(session.user.id);
             
             const profile = await fetchProfile(session.user.id);
-            if (profile && mounted) {
+            if (profile && mountedRef.current) {
               setUser(profile);
               
               const adminStatus = await checkAdminStatus(session.user.id);
-              if (mounted) {
+              if (mountedRef.current) {
                 setIsAdmin(adminStatus);
               }
             }
           } else if (event === 'SIGNED_OUT') {
             console.log('👋 User signed out');
-            if (mounted) {
+            if (mountedRef.current) {
               setUser(null);
               setIsAdmin(false);
               setError(null);
@@ -486,11 +453,16 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
           } else if (event === 'TOKEN_REFRESHED') {
             console.log('🔄 Token refreshed');
             // No hacer nada especial para refresh de token
+            // El usuario ya está cargado
           }
         } catch (err) {
           console.error('❌ Error handling auth state change:', err);
-          if (mounted) {
+          if (mountedRef.current) {
             setError('Error en el cambio de estado de autenticación');
+          }
+        } finally {
+          if (mountedRef.current) {
+            setLoading(false);
           }
         }
       }
@@ -501,10 +473,21 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
 
     // ✅ CLEANUP FUNCTION
     return () => {
-      mounted = false;
+      console.log('🧹 Cleaning up AuthProvider...');
+      mountedRef.current = false;
       subscription.unsubscribe();
     };
   }, []); // ✅ DEPENDENCIES VACÍAS - SOLO EJECUTAR UNA VEZ
+
+  // ================================================================
+  // CLEANUP ON UNMOUNT
+  // ================================================================
+  
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   // ================================================================
   // CONTEXT VALUE MEMOIZADO
