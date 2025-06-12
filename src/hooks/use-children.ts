@@ -79,11 +79,11 @@ export function useChildren(options: UseChildrenOptions = {}): UseChildrenReturn
 
     console.log('👶 Fetching children for user:', user.id);
 
-    // ✅ SOLUCIÓN: Usar la vista user_accessible_children que ya maneja toda la lógica
+    // ✅ USAR LA VISTA EN LUGAR DE JOIN MANUAL
     let query = supabase
-      .from('user_accessible_children')  // Vista en lugar de tabla + JOIN
+      .from('user_accessible_children')
       .select('*')
-      .eq('user_id', user.id);  // La vista ya incluye user_id
+      .eq('user_id', user.id);
 
     // Filtrar por estado activo si se requiere
     if (!includeInactive) {
@@ -97,8 +97,10 @@ export function useChildren(options: UseChildrenOptions = {}): UseChildrenReturn
       throw error;
     }
 
-    // Transformar datos para el tipo ChildWithRelation
-    const transformedChildren: ChildWithRelation[] = (data || []).map((child: any) => ({
+    console.log('✅ Children fetched successfully:', data?.length || 0);
+
+    // Transformar datos para la interfaz ChildWithRelation
+    const transformedData = data?.map(child => ({
       id: child.id,
       name: child.name,
       birth_date: child.birth_date,
@@ -113,16 +115,24 @@ export function useChildren(options: UseChildrenOptions = {}): UseChildrenReturn
       created_by: child.created_by,
       created_at: child.created_at,
       updated_at: child.updated_at,
-      // Campos de la relación
+      // Campos de la relación desde la vista
       relationship_type: child.relationship_type,
       can_view: child.can_view,
       can_edit: child.can_edit,
       can_export: child.can_export,
       can_invite_others: child.can_invite_others,
-    }));
+    })) || [];
 
-    setChildren(transformedChildren);
-    console.log('✅ Children fetched successfully:', transformedChildren.length);
+    setChildren(transformedData as ChildWithRelation[]);
+
+    // Registrar acceso para auditoría
+    if (transformedData && transformedData.length > 0) {
+      await auditSensitiveAccess(
+        'VIEW_CHILDREN_LIST',
+        user.id,
+        `Accessed ${transformedData.length} children`
+      );
+    }
 
   } catch (err) {
     console.error('❌ Error in fetchChildren:', err);

@@ -88,32 +88,14 @@ export function useLogs(options: UseLogsOptions = {}): UseLogsReturn {
   if (!user) return [];
 
   try {
-    // ✅ SOLUCIÓN: Usar consulta simple sin OR complejo
+    // ✅ USAR CONSULTA SIMPLE SIN OR PROBLEMÁTICO
     const { data } = await supabase
       .from('user_child_relations')
       .select('child_id')
       .eq('user_id', user.id)
-      .eq('is_active', true)
-      // Usar dos consultas separadas si es necesario, o simplificar
-      .is('expires_at', null); // Solo relaciones sin expiración por ahora
+      .eq('is_active', true);
 
-    // Si necesitas incluir relaciones que no han expirado, haz una segunda consulta
-    const { data: notExpiredData } = await supabase
-      .from('user_child_relations')
-      .select('child_id')
-      .eq('user_id', user.id)
-      .eq('is_active', true)
-      .not('expires_at', 'is', null)
-      .gt('expires_at', new Date().toISOString());
-
-    // Combinar resultados y eliminar duplicados
-    const allChildrenIds = [
-      ...(data?.map(r => r.child_id) || []),
-      ...(notExpiredData?.map(r => r.child_id) || [])
-    ];
-
-    return [...new Set(allChildrenIds)]; // Eliminar duplicados
-
+    return data?.map(relation => relation.child_id) || [];
   } catch (error) {
     console.error('❌ Error getting accessible children:', error);
     return [];
