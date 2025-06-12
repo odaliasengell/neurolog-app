@@ -2,15 +2,12 @@
 const nextConfig = {
   // Configuración TypeScript
   typescript: {
-    // Ignorar errores de build durante desarrollo
     ignoreBuildErrors: false,
   },
 
   // Configuración ESLint
   eslint: {
-    // Directorios a verificar durante build
     dirs: ['src/app', 'src/components', 'src/lib', 'src/hooks'],
-    // No ignorar errores de ESLint durante build
     ignoreDuringBuilds: false,
   },
 
@@ -30,13 +27,12 @@ const nextConfig = {
         pathname: '/**',
       }
     ],
-    // Configuración adicional para optimización
     formats: ['image/webp', 'image/avif'],
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
   },
 
-  // Configuración de headers de seguridad
+  // Headers de seguridad
   async headers() {
     return [
       {
@@ -84,14 +80,8 @@ const nextConfig = {
   poweredByHeader: false,
   trailingSlash: false,
 
-  // Configuración para desarrollo local
-  env: {
-    CUSTOM_KEY: 'my-value',
-  },
-
   // Configuración de Webpack personalizada
   webpack: (config, { buildId, dev, isServer, defaultLoaders, webpack }) => {
-    // Optimizaciones adicionales si es necesario
     if (!isServer) {
       config.resolve.fallback = {
         ...config.resolve.fallback,
@@ -101,7 +91,7 @@ const nextConfig = {
       };
     }
 
-    // Agregar reglas para archivos SVG si es necesario
+    // Reglas para archivos SVG
     config.module.rules.push({
       test: /\.svg$/,
       use: ['@svgr/webpack'],
@@ -110,24 +100,23 @@ const nextConfig = {
     return config;
   },
 
-  // Configuración experimental (Next.js 15.3.3)
+  // Configuración actualizada para Next.js 15.3.3
   experimental: {
-    // Características experimentales estables en 15.3.3
     optimizePackageImports: ['recharts', 'lucide-react'],
-    
-    // Configuración de Turbopack (opcional)
-    turbo: {
-      rules: {
-        '*.svg': {
-          loaders: ['@svgr/webpack'],
-          as: '*.js',
-        },
+  },
+
+  // Configuración de Turbopack (ahora estable)
+  turbopack: {
+    rules: {
+      '*.svg': {
+        loaders: ['@svgr/webpack'],
+        as: '*.js',
       },
     },
-
-    // Configuración de servidor edge (si necesario para el futuro)
-    serverComponentsExternalPackages: ['@supabase/supabase-js'],
   },
+
+  // Dependencias externas del servidor (movido de experimental)
+  serverExternalPackages: ['@supabase/supabase-js'],
 
   // Configuración de output para deploy
   output: 'standalone',
@@ -141,11 +130,6 @@ const nextConfig = {
 
   // Configuración de bundles
   bundlePagesRouterDependencies: true,
-  
-  // Configuración de análisis de bundles (descomentar si necesitas análisis)
-  // analyzer: {
-  //   enabled: process.env.ANALYZE === 'true',
-  // },
 };
 
 module.exports = nextConfig;
