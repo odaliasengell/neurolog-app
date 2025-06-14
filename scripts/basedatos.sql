@@ -1,14 +1,4 @@
 -- ================================================================
--- NEUROLOG APP - SCRIPT FINAL COMPLETO OPTIMIZADO
--- ================================================================
--- Cumple todos los requisitos de calidad de SonarQube
--- Targets: Bugs 0, Code Smells <50, Security Hotspots 0, Esfuerzo <4h
--- Versión optimizada para evaluación práctica
-
-SET client_min_messages = WARNING;
-SET search_path = public, auth;
-
--- ================================================================
 -- 1. LIMPIEZA COMPLETA DEL SISTEMA
 -- ================================================================
 
