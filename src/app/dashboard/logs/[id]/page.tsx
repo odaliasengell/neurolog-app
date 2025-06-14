@@ -14,7 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
-import { 
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -25,7 +25,7 @@ import {
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useLogs } from '@/hooks/use-logs';
 import type { LogWithDetails, IntensityLevel } from '@/types';
-import { 
+import {
   EditIcon,
   MoreVerticalIcon,
   CalendarIcon,
@@ -51,7 +51,7 @@ export default function LogDetailPage() {
   const logId = params.id as string;
   const { user } = useAuth();
   const { loading, getLogById, addParentFeedback, markAsReviewed } = useLogs();
-  
+
   const [log, setLog] = useState<LogWithDetails | null>(null);
   const [feedback, setFeedback] = useState('');
   const [specialistNotes, setSpecialistNotes] = useState('');
@@ -103,7 +103,7 @@ export default function LogDetailPage() {
 
   const handleAddFeedback = async () => {
     if (!feedback.trim()) return;
-    
+
     try {
       await addParentFeedback(log.id, feedback);
       setFeedback('');
@@ -149,7 +149,7 @@ export default function LogDetailPage() {
             </p>
           </div>
         </div>
-        
+
         <div className="flex items-center space-x-2">
           {log.can_edit && (
             <Button variant="outline" size="sm">
@@ -198,7 +198,7 @@ export default function LogDetailPage() {
             <CardHeader className="pb-4">
               <div className="flex items-start justify-between">
                 <div className="flex items-center space-x-3">
-                  <div 
+                  <div
                     className="w-4 h-4 rounded-full"
                     style={{ backgroundColor: log.category_color }}
                   />
@@ -209,7 +209,7 @@ export default function LogDetailPage() {
                     </CardDescription>
                   </div>
                 </div>
-                
+
                 <div className="flex items-center space-x-2">
                   {log.is_private && (
                     <Badge variant="secondary">
@@ -227,7 +227,7 @@ export default function LogDetailPage() {
                 </div>
               </div>
             </CardHeader>
-            
+
             <CardContent className="space-y-6">
               {/* Content */}
               <div>
@@ -244,8 +244,8 @@ export default function LogDetailPage() {
                     <div>
                       <p className="text-lg font-semibold text-gray-900">{log.mood_score}/5</p>
                       <p className="text-sm text-gray-600">
-                        {log.mood_score <= 2 ? 'Necesita atención' : 
-                         log.mood_score <= 3 ? 'Normal' : 'Muy positivo'}
+                        {log.mood_score <= 2 ? 'Necesita atención' :
+                          log.mood_score <= 3 ? 'Normal' : 'Muy positivo'}
                       </p>
                     </div>
                   </div>
@@ -253,19 +253,12 @@ export default function LogDetailPage() {
               )}
 
               {/* Tags */}
-              {log.tags && log.tags.length > 0 && (
-                <div>
-                  <h4 className="text-sm font-medium text-gray-900 mb-2">Etiquetas</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {log.tags.map((tag, index) => (
-                      <Badge key={index} variant="outline">
-                        <TagIcon className="h-3 w-3 mr-1" />
-                        {tag}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              )}
+              {log.tags.map((tag) => (
+                <Badge key={tag} variant="outline">
+                  <TagIcon className="h-3 w-3 mr-1" />
+                  {tag}
+                </Badge>
+              ))}
 
               {/* Context Information */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
