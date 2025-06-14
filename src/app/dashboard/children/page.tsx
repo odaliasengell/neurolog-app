@@ -80,11 +80,11 @@ const calculateAge = (birthDate: string): number => {
 };
 
 const getRelationshipColor = (type: RelationshipType): string => {
-  return RELATIONSHIP_COLORS[type] || RELATIONSHIP_COLORS.observer;
+  return RELATIONSHIP_COLORS[type] ?? RELATIONSHIP_COLORS.observer;
 };
 
 const getRelationshipLabel = (type: RelationshipType): string => {
-  return RELATIONSHIP_LABELS[type] || type;
+  return RELATIONSHIP_LABELS[type] ?? type;
 };
 
 // ================================================================
