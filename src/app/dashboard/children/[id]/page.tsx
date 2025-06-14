@@ -50,7 +50,7 @@ export default function ChildDetailPage() {
   const router = useRouter();
   const childId = params.id as string;
   // Removed unused user variable
-  const { children, loading: childLoading, getChildById } = useChildren();
+  const { loading: childLoading, getChildById } = useChildren();
   const { logs, loading: logsLoading } = useLogs({ childId }); // Removed unused stats
   
   const [child, setChild] = useState<ChildWithRelation | null>(null);
