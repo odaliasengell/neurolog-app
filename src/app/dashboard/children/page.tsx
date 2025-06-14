@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -117,9 +117,8 @@ interface StatCardProps {
 
 function ChildCard({ child, onEdit, onViewDetails, onManageUsers }: ChildCardProps): JSX.Element {
   return (
-    <Card 
+    <article 
       className="group hover:shadow-md transition-all duration-200"
-      role="article"
       aria-labelledby={`child-card-title-${child.id}`}
     >
       <CardHeader className="pb-3">
@@ -225,119 +224,122 @@ function ChildCard({ child, onEdit, onViewDetails, onManageUsers }: ChildCardPro
           </div>
         </div>
       </CardContent>
-    </Card>
+    </article>
   );
 }
 
 function FiltersCard({ filters, onFiltersChange }: FiltersCardProps): JSX.Element {
   return (
-    <Card role="region" aria-labelledby="filters-title">
-      <CardHeader>
-        <CardTitle id="filters-title" className="flex items-center text-base">
-          <FilterIcon className="h-4 w-4 mr-2" aria-hidden="true" />
-          Filtros de búsqueda
-        </CardTitle>
-        <CardDescription>
-          Utiliza estos filtros para encontrar niños específicos
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="space-y-2">
-            <label 
-              htmlFor="search-name-input" 
-              className="text-sm font-medium block"
-            >
-              Buscar por nombre
-            </label>
-            <div className="relative">
-              <SearchIcon 
-                className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" 
-                aria-hidden="true"
-              />
-              <Input
-                id="search-name-input"
-                type="text"
-                placeholder="Nombre del niño..."
-                value={filters.search || ''}
-                onChange={(e) => onFiltersChange({ ...filters, search: e.target.value })}
-                className="pl-10"
-                aria-label="Buscar niños por nombre"
-                aria-describedby="search-help"
-              />
-            </div>
-            <p id="search-help" className="text-xs text-gray-500">
-              Busca por nombre completo o parcial
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <label 
-              htmlFor="relationship-type-select" 
-              className="text-sm font-medium block"
-            >
-              Tipo de relación
-            </label>
-            <Select 
-              value={filters.relationship_type || 'all'} 
-              onValueChange={(value) => onFiltersChange({ 
-                ...filters, 
-                relationship_type: value === 'all' ? undefined : value as RelationshipType 
-              })}
-            >
-              <SelectTrigger 
-                id="relationship-type-select"
-                aria-label="Seleccionar tipo de relación"
-                aria-describedby="relationship-help"
+    <section aria-labelledby="filters-title">
+      <Card>
+        <CardHeader>
+          <CardTitle id="filters-title" className="flex items-center text-base">
+            <FilterIcon className="h-4 w-4 mr-2" aria-hidden="true" />
+            Filtros de búsqueda
+          </CardTitle>
+          <CardDescription>
+            Utiliza estos filtros para encontrar niños específicos
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <label 
+                htmlFor="search-name-input" 
+                className="text-sm font-medium block"
               >
-                <SelectValue placeholder="Tipo de relación" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas las relaciones</SelectItem>
-                <SelectItem value="parent">Padre/Madre</SelectItem>
-                <SelectItem value="teacher">Docente</SelectItem>
-                <SelectItem value="specialist">Especialista</SelectItem>
-                <SelectItem value="observer">Observador</SelectItem>
-                <SelectItem value="family">Familia</SelectItem>
-              </SelectContent>
-            </Select>
-            <p id="relationship-help" className="text-xs text-gray-500">
-              Filtra según tu relación con el niño
-            </p>
-          </div>
+                Buscar por nombre
+              </label>
+              <div className="relative">
+                <SearchIcon 
+                  className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" 
+                  aria-hidden="true"
+                />
+                <Input
+                  id="search-name-input"
+                  type="text"
+                  placeholder="Nombre del niño..."
+                  value={filters.search || ''}
+                  onChange={(e) => onFiltersChange({ ...filters, search: e.target.value })}
+                  className="pl-10"
+                  aria-label="Buscar niños por nombre"
+                  aria-describedby="search-help"
+                />
+              </div>
+              <p id="search-help" className="text-xs text-gray-500">
+                Busca por nombre completo o parcial
+              </p>
+            </div>
 
-          <div className="space-y-2">
-            <label 
-              htmlFor="max-age-input" 
-              className="text-sm font-medium block"
-            >
-              Edad máxima
-            </label>
-            <Input
-              id="max-age-input"
-              type="number"
-              placeholder="Años"
-              min="0"
-              max="25"
-              value={filters.max_age || ''}
-              onChange={(e) => onFiltersChange({ 
-                ...filters, 
-                max_age: e.target.value ? parseInt(e.target.value) : undefined 
-              })}
-              aria-label="Filtrar por edad máxima en años"
-              aria-describedby="age-help"
-            />
-            <p id="age-help" className="text-xs text-gray-500">
-              Muestra niños de esta edad o menores
-            </p>
+            <div className="space-y-2">
+              <label 
+                htmlFor="relationship-type-select" 
+                className="text-sm font-medium block"
+              >
+                Tipo de relación
+              </label>
+              <Select 
+                value={filters.relationship_type || 'all'} 
+                onValueChange={(value) => onFiltersChange({ 
+                  ...filters, 
+                  relationship_type: value === 'all' ? undefined : value as RelationshipType 
+                })}
+              >
+                <SelectTrigger 
+                  id="relationship-type-select"
+                  aria-label="Seleccionar tipo de relación"
+                  aria-describedby="relationship-help"
+                >
+                  <SelectValue placeholder="Tipo de relación" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas las relaciones</SelectItem>
+                  <SelectItem value="parent">Padre/Madre</SelectItem>
+                  <SelectItem value="teacher">Docente</SelectItem>
+                  <SelectItem value="specialist">Especialista</SelectItem>
+                  <SelectItem value="observer">Observador</SelectItem>
+                  <SelectItem value="family">Familia</SelectItem>
+                </SelectContent>
+              </Select>
+              <p id="relationship-help" className="text-xs text-gray-500">
+                Filtra según tu relación con el niño
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <label 
+                htmlFor="max-age-input" 
+                className="text-sm font-medium block"
+              >
+                Edad máxima
+              </label>
+              <Input
+                id="max-age-input"
+                type="number"
+                placeholder="Años"
+                min="0"
+                max="25"
+                value={filters.max_age || ''}
+                onChange={(e) => onFiltersChange({ 
+                  ...filters, 
+                  max_age: e.target.value ? parseInt(e.target.value) : undefined 
+                })}
+                aria-label="Filtrar por edad máxima en años"
+                aria-describedby="age-help"
+              />
+              <p id="age-help" className="text-xs text-gray-500">
+                Muestra niños de esta edad o menores
+              </p>
+            </div>
           </div>
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </section>
   );
 }
 
-function StatCard({ title, value, icon, description, iconColor = 'text-blue-600' }: StatCardProps): JSX.Element {
+function StatCard(props: Readonly<StatCardProps>): JSX.Element {
+  const { title, value, icon, description, iconColor = 'text-blue-600' } = props;
   return (
     <Card>
       <CardContent className="p-6">
@@ -409,16 +411,15 @@ export default function ChildrenPage(): JSX.Element {
 
   if (!user) {
     return (
-      <div 
+      <output
         className="flex items-center justify-center min-h-[400px]"
-        role="status"
         aria-label="Cargando información del usuario"
       >
         <div className="text-center">
           <UsersIcon className="mx-auto h-12 w-12 text-gray-300 mb-4" aria-hidden="true" />
           <p className="text-gray-500">Cargando...</p>
         </div>
-      </div>
+      </output>
     );
   }
 
@@ -571,7 +572,8 @@ export default function ChildrenPage(): JSX.Element {
               </p>
               <div className="flex items-center space-x-2">
                 <span className="text-sm text-gray-600">Vista:</span>
-                <div role="group" aria-label="Opciones de vista">
+                <fieldset className="inline-flex space-x-2">
+                  <legend className="sr-only">Opciones de vista</legend>
                   <Button
                     variant={viewMode === 'grid' ? 'default' : 'outline'}
                     size="sm"
@@ -590,7 +592,7 @@ export default function ChildrenPage(): JSX.Element {
                   >
                     Lista
                   </Button>
-                </div>
+                </fieldset>
               </div>
             </div>
 
