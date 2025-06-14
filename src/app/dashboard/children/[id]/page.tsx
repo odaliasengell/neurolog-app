@@ -262,7 +262,7 @@ export default function ChildDetailPage() {
                 <CardContent className="space-y-4">
                   <div className="flex items-start space-x-4">
                     <Avatar className="h-16 w-16">
-                      <AvatarImage src={child.avatar_url} alt={child.name} />
+                      <AvatarImage src={child.avatar_url ?? undefined} alt={child.name} />
                       <AvatarFallback className="bg-blue-100 text-blue-600 text-xl font-bold">
                         {child.name.charAt(0)}
                       </AvatarFallback>
@@ -376,7 +376,7 @@ export default function ChildDetailPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {child.user_relations?.map((relation) => (
+                  {child.user_relations?.map((relation: { user_id: any; relationship_type: string; user_email: string; user_name: any; can_edit: any; can_export: any; }) => (
                     <div key={`${relation.user_id}-${relation.relationship_type}`} className="flex items-center justify-between">
                       <div className="flex items-center space-x-3">
                         <Avatar className="h-8 w-8">
