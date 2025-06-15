@@ -50,41 +50,41 @@ interface RecentLogsProps {
 // COMPONENTE DE ESTADÍSTICAS RÁPIDAS RESPONSIVO
 // ================================================================
 
-function QuickStats({ stats, loading }: QuickStatsProps) {
+function QuickStats({stats, loading }: QuickStatsProps) {
   const statCards = [
     {
       title: 'Niños',
-      value: stats.total_children || 0,
+      value: stats.total_children ?? 0,
       icon: Users,
       color: 'text-blue-600',
       bgColor: 'bg-blue-50',
       borderColor: 'border-blue-200',
       description: 'En seguimiento',
-      trend: stats.children_growth || 0
+      trend: stats.children_growth ?? 0
     },
     {
       title: 'Registros',
-      value: stats.total_logs || 0,
+      value: stats.total_logs ?? 0,
       icon: BookOpen,
       color: 'text-green-600',
       bgColor: 'bg-green-50',
       borderColor: 'border-green-200',
       description: 'Documentados',
-      trend: stats.logs_growth || 0
+      trend: stats.logs_growth ?? 0
     },
     {
       title: 'Esta Semana',
-      value: stats.logs_this_week || 0,
+      value: stats.logs_this_week ?? 0,
       icon: TrendingUp,
       color: 'text-purple-600',
       bgColor: 'bg-purple-50',
       borderColor: 'border-purple-200',
       description: 'Nuevos registros',
-      trend: stats.weekly_growth || 0
+      trend: stats.weekly_growth ?? 0
     },
     {
       title: 'Pendientes',
-      value: stats.pending_reviews || 0,
+      value: stats.pending_reviews ?? 0,
       icon: AlertCircle,
       color: 'text-orange-600',
       bgColor: 'bg-orange-50',
@@ -399,7 +399,7 @@ function RecentLogs({ logs, loading }: RecentLogsProps) {
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const { children, loading: childrenLoading, stats: childrenStats } = useChildren();
+  const { children, loading: childrenLoading } = useChildren();
   const { logs, loading: logsLoading, stats } = useLogs();
 
   const greeting = () => {
