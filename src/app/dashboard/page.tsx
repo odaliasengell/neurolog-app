@@ -248,14 +248,14 @@ function AccessibleChildren({ children, loading }: AccessibleChildrenProps) {
               <div className="mt-4 space-y-2">
                 <div className="flex justify-between text-xs text-gray-500">
                   <span>Actividad semanal</span>
-                  <span>{child.weekly_logs || 0}/7</span>
+                  <span>{child.weekly_logs ?? 0}/7</span>
                 </div>
                 <Progress
-                  value={((child.weekly_logs || 0) / 7) * 100}
+                  value={((child.weekly_logs ?? 0) / 7) * 100}
                   className="h-2"
                   indicatorClassName={
-                    (child.weekly_logs || 0) >= 5 ? "bg-green-500" :
-                      (child.weekly_logs || 0) >= 3 ? "bg-yellow-500" : "bg-red-500"
+                    (child.weekly_logs ?? 0) >= 5 ? "bg-green-500" :
+                      (child.weekly_logs ?? 0) >= 3 ? "bg-yellow-500" : "bg-red-500"
                   }
                 />
               </div>
@@ -349,7 +349,7 @@ function RecentLogs({ logs, loading }: RecentLogsProps) {
                   </div>
                 )}
                 <Badge variant="outline" className="text-xs">
-                  {log.category_name || 'General'}
+                  {log.category_name ?? 'General'}
                 </Badge>
               </div>
             </div>
